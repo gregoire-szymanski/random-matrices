@@ -10,7 +10,7 @@ import pandas as pd
 
 from mpdiff.config.schemas import MPForwardConfig, MPInverseConfig
 from mpdiff.spectral.densities import DiscreteSpectrum, GridDensity
-from mpdiff.spectral.inverse import available_inverse_methods, invert_mp_density
+from mpdiff.spectral.inverse import invert_mp_density, resolve_inverse_methods
 from mpdiff.spectral.metrics import compare_grid_densities
 from mpdiff.spectral.transforms import compute_mp_forward
 
@@ -26,14 +26,8 @@ class InversionBenchmarkResult:
 
 
 def resolve_methods(inverse_settings: MPInverseConfig, methods: list[str] | None = None) -> list[str]:
-    """Resolve methods from explicit input or inversion config switches."""
-    if methods is not None:
-        return list(methods)
-    if inverse_settings.compare_all_methods:
-        return available_inverse_methods()
-    if inverse_settings.compare_methods:
-        return list(inverse_settings.compare_methods)
-    return [inverse_settings.method]
+    """Compatibility wrapper for method resolution in benchmark workflows."""
+    return resolve_inverse_methods(inverse_settings, methods=methods)
 
 
 def _clone_inverse_settings(inverse_settings: MPInverseConfig, method_name: str) -> MPInverseConfig:

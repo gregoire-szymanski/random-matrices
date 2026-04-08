@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from mpdiff.config.loader import load_config
 
 
@@ -34,3 +36,28 @@ def test_load_catalog_config_with_compare_all() -> None:
 
     assert cfg.mp_inverse.compare_all_methods is True
     assert cfg.mp_inverse.compare_methods == []
+
+
+def test_compare_all_and_compare_methods_conflict_raises(tmp_path: Path) -> None:
+    config_path = tmp_path / "bad.yaml"
+    config_path.write_text(
+        """
+simulation:
+  d: 10
+  T: 1.0
+  n_steps: 40
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    scalar: 1.0
+mp_inverse:
+  method: optimization
+  compare_all_methods: true
+  compare_methods: [optimization, fixed_point]
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError):
+        load_config(config_path)

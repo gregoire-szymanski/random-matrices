@@ -27,13 +27,16 @@ def run_mp_forward(config_path: str | Path) -> dict[str, Any]:
     setup_logging(cfg.global_settings.log_level)
     logger = logging.getLogger("mpdiff.experiments.run_mp_forward")
     out_dir = ensure_output_dir(cfg)
+    timers: dict[str, float] = {}
 
-    rng = make_rng(cfg.global_settings.seed)
-    population = build_population_spectrum(cfg, rng)
-    aspect_ratio = resolve_aspect_ratio(cfg)
-    grid = make_linear_grid(cfg.mp_forward.grid_min, cfg.mp_forward.grid_max, cfg.mp_forward.num_points)
+    with timed_block("forward_setup", logger if cfg.benchmark.enabled else None) as timer:
+        rng = make_rng(cfg.global_settings.seed)
+        population = build_population_spectrum(cfg, rng)
+        aspect_ratio = resolve_aspect_ratio(cfg)
+        grid = make_linear_grid(cfg.mp_forward.grid_min, cfg.mp_forward.grid_max, cfg.mp_forward.num_points)
+    timers[timer.label] = timer.elapsed_seconds
 
-    with timed_block("mp_forward_transform", logger if cfg.benchmark.enabled else None):
+    with timed_block("mp_forward_transform", logger if cfg.benchmark.enabled else None) as timer:
         forward_result = compute_mp_forward(
             population=population,
             c=aspect_ratio,
@@ -43,6 +46,7 @@ def run_mp_forward(config_path: str | Path) -> dict[str, Any]:
             max_iter=cfg.mp_forward.max_iter,
             damping=cfg.mp_forward.damping,
         )
+    timers[timer.label] = timer.elapsed_seconds
 
     mp_density = forward_result.transformed_density
     pop_density = population.to_grid_density(grid)
@@ -68,8 +72,11 @@ def run_mp_forward(config_path: str | Path) -> dict[str, Any]:
         plt.close(fig)
 
     metadata = {
+        "runner": "mp-forward",
         "config_path": str(config_path),
+        "seed": cfg.global_settings.seed,
         "aspect_ratio_c": aspect_ratio,
+        "timers_seconds": timers,
         "diagnostics": {
             key: value
             for key, value in forward_result.diagnostics.items()
@@ -89,5 +96,17 @@ def run_mp_forward(config_path: str | Path) -> dict[str, Any]:
         "mean_fixed_point_iterations": forward_result.diagnostics["mean_iterations"],
         "newton_fallback_rate": forward_result.diagnostics["newton_fallback_rate"],
     }
+
+    if summary["convergence_rate"] < 0.99:
+        logger.warning(
+            "Forward solver convergence rate is %.3f (<0.99). Consider larger eta or max_iter.",
+            summary["convergence_rate"],
+        )
+    if summary["newton_fallback_rate"] > 0.15:
+        logger.warning(
+            "Forward solver used Newton fallback frequently (rate=%.3f).",
+            summary["newton_fallback_rate"],
+        )
+
     log_summary(logger, "MP forward summary", summary)
     return summary

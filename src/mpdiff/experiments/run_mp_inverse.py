@@ -13,7 +13,7 @@ import numpy as np
 from mpdiff.config.loader import load_config
 from mpdiff.plotting.diagnostics import plot_convergence_curve
 from mpdiff.plotting.spectra import plot_density_comparison, plot_population_forward_recovered
-from mpdiff.spectral.inverse import available_inverse_methods, compare_inverse_methods
+from mpdiff.spectral.inverse import compare_inverse_methods, resolve_inverse_methods
 from mpdiff.spectral.metrics import compare_grid_densities, discrete_to_grid
 from mpdiff.spectral.grids import make_linear_grid
 from mpdiff.spectral.transforms import compute_mp_forward
@@ -41,13 +41,17 @@ def run_mp_inverse(config_path: str | Path) -> dict[str, Any]:
     setup_logging(cfg.global_settings.log_level)
     logger = logging.getLogger("mpdiff.experiments.run_mp_inverse")
     out_dir = ensure_output_dir(cfg)
+    timers: dict[str, float] = {}
 
-    rng = make_rng(cfg.global_settings.seed)
-    population = build_population_spectrum(cfg, rng)
-    aspect_ratio = resolve_aspect_ratio(cfg)
-    grid = make_linear_grid(cfg.mp_forward.grid_min, cfg.mp_forward.grid_max, cfg.mp_forward.num_points)
+    with timed_block("inverse_setup", logger if cfg.benchmark.enabled else None) as timer:
+        rng = make_rng(cfg.global_settings.seed)
+        population = build_population_spectrum(cfg, rng)
+        aspect_ratio = resolve_aspect_ratio(cfg)
+        grid = make_linear_grid(cfg.mp_forward.grid_min, cfg.mp_forward.grid_max, cfg.mp_forward.num_points)
+        density_bandwidth = cfg.analysis.empirical_density_bandwidth or cfg.plotting.density_bandwidth
+    timers[timer.label] = timer.elapsed_seconds
 
-    with timed_block("mp_forward_for_inverse", logger if cfg.benchmark.enabled else None):
+    with timed_block("mp_forward_for_inverse", logger if cfg.benchmark.enabled else None) as timer:
         observed_result = compute_mp_forward(
             population=population,
             c=aspect_ratio,
@@ -57,14 +61,12 @@ def run_mp_inverse(config_path: str | Path) -> dict[str, Any]:
             max_iter=cfg.mp_forward.max_iter,
             damping=cfg.mp_forward.damping,
         )
+    timers[timer.label] = timer.elapsed_seconds
 
     observed = observed_result.transformed_density
-    if cfg.mp_inverse.compare_all_methods:
-        methods = available_inverse_methods()
-    else:
-        methods = cfg.mp_inverse.compare_methods or [cfg.mp_inverse.method]
+    methods = resolve_inverse_methods(cfg.mp_inverse)
 
-    with timed_block("mp_inverse_methods", logger if cfg.benchmark.enabled else None):
+    with timed_block("mp_inverse_methods", logger if cfg.benchmark.enabled else None) as timer:
         inverse_results = compare_inverse_methods(
             observed=observed,
             aspect_ratio=aspect_ratio,
@@ -72,12 +74,14 @@ def run_mp_inverse(config_path: str | Path) -> dict[str, Any]:
             forward_settings=cfg.mp_forward,
             methods=methods,
         )
+    timers[timer.label] = timer.elapsed_seconds
 
-    population_density = population.to_grid_density(grid)
+    # Keep density smoothing consistent across observed and recovered comparisons.
+    population_density = population.to_grid_density(grid, bandwidth=density_bandwidth)
 
     method_summaries: dict[str, dict[str, Any]] = {}
     for method_name, result in inverse_results.items():
-        estimated_density = discrete_to_grid(result.estimated_population, grid)
+        estimated_density = discrete_to_grid(result.estimated_population, grid, bandwidth=density_bandwidth)
         recovered_metrics = compare_grid_densities(population_density, estimated_density)
         reconstruction_metrics = compare_grid_densities(observed, result.reconstructed_observed)
 
@@ -134,7 +138,7 @@ def run_mp_inverse(config_path: str | Path) -> dict[str, Any]:
         plt.close(fig)
 
         primary = inverse_results[cfg.mp_inverse.method] if cfg.mp_inverse.method in inverse_results else next(iter(inverse_results.values()))
-        primary_estimated_density = discrete_to_grid(primary.estimated_population, grid)
+        primary_estimated_density = discrete_to_grid(primary.estimated_population, grid, bandwidth=density_bandwidth)
         fig2, _ = plot_population_forward_recovered(
             population_density=population_density,
             forward_density=observed,
@@ -149,7 +153,7 @@ def run_mp_inverse(config_path: str | Path) -> dict[str, Any]:
 
         fig3, _ = plot_density_comparison(
             densities=[population_density]
-            + [discrete_to_grid(res.estimated_population, grid) for res in inverse_results.values()],
+            + [discrete_to_grid(res.estimated_population, grid, bandwidth=density_bandwidth) for res in inverse_results.values()],
             labels=["true population"] + [f"estimated ({name})" for name in inverse_results.keys()],
             title="Population Recovery Across Inverse Methods",
             figsize=cfg.plotting.figsize,
@@ -158,9 +162,12 @@ def run_mp_inverse(config_path: str | Path) -> dict[str, Any]:
         plt.close(fig3)
 
     metadata = {
+        "runner": "mp-inverse",
         "config_path": str(config_path),
+        "seed": cfg.global_settings.seed,
         "aspect_ratio_c": aspect_ratio,
         "methods": methods,
+        "timers_seconds": timers,
         "method_summaries": method_summaries,
     }
     if cfg.global_settings.save_metadata:
@@ -178,5 +185,18 @@ def run_mp_inverse(config_path: str | Path) -> dict[str, Any]:
         "population_wasserstein_1": float(primary_summary["population_recovery"]["wasserstein_1"]),
         "forward_reconstruction_l2": float(primary_summary["forward_reconstruction"]["l2"]),
     }
+
+    all_w1 = [float(v["population_recovery"]["wasserstein_1"]) for v in method_summaries.values()]
+    if summary["forward_reconstruction_l2"] > 0.15:
+        logger.warning(
+            "Primary inverse reconstruction L2 is %.3f (>0.15): inverse recovery may be unstable.",
+            summary["forward_reconstruction_l2"],
+        )
+    if len(all_w1) >= 2 and (max(all_w1) - min(all_w1)) > 0.25:
+        logger.warning(
+            "Inverse methods disagree noticeably on population recovery (W1 spread=%.3f).",
+            max(all_w1) - min(all_w1),
+        )
+
     log_summary(logger, "MP inverse summary", summary)
     return summary

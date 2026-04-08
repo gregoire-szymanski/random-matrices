@@ -1,4 +1,9 @@
-"""Experiment runner: simulation -> realized spectrum -> MP inverse."""
+"""Experiment runner: simulation -> realized spectrum -> MP inverse.
+
+Reference population law used for comparison is the eigenvalue law of the
+time-averaged covariance (integrated over segments). For constant volatility,
+this reduces to the model covariance itself.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +28,7 @@ from mpdiff.spectral.empirical import (
     realized_covariance_from_increments,
 )
 from mpdiff.spectral.grids import make_linear_grid
-from mpdiff.spectral.inverse import available_inverse_methods, compare_inverse_methods
+from mpdiff.spectral.inverse import compare_inverse_methods, resolve_inverse_methods
 from mpdiff.spectral.metrics import compare_grid_densities, discrete_to_grid
 from mpdiff.spectral.transforms import compute_mp_forward
 from mpdiff.utils.logging_utils import setup_logging
@@ -63,7 +68,15 @@ def _float(value: Any) -> float:
 
 
 def run_full_pipeline(config_path: str | Path) -> dict[str, Any]:
-    """Run full end-to-end pipeline with simulated paths and MP recovery."""
+    """Run full end-to-end pipeline with simulated paths and MP recovery.
+
+    Pipeline:
+    1. simulate diffusion paths,
+    2. build realized covariance from increments,
+    3. compute realized empirical spectrum,
+    4. run MP inverse methods,
+    5. compare recovered population law(s) against reference integrated law.
+    """
     cfg = load_config(config_path)
     setup_logging(cfg.global_settings.log_level)
     logger = logging.getLogger("mpdiff.experiments.run_full_pipeline")
@@ -100,21 +113,19 @@ def run_full_pipeline(config_path: str | Path) -> dict[str, Any]:
 
     aspect_ratio = resolve_aspect_ratio(cfg)
     grid = make_linear_grid(cfg.mp_forward.grid_min, cfg.mp_forward.grid_max, cfg.mp_forward.num_points)
+    bandwidth = cfg.analysis.empirical_density_bandwidth or cfg.plotting.density_bandwidth
 
     with timed_block("empirical_density_estimation", logger if cfg.benchmark.enabled else None) as timer:
         empirical_discrete = empirical_discrete_spectrum(realized_eigs)
         empirical_density = empirical_spectral_density(
             realized_eigs,
             grid=grid,
-            bandwidth=cfg.analysis.empirical_density_bandwidth or cfg.plotting.density_bandwidth,
+            bandwidth=bandwidth,
         )
     _timer_store(timers, timer.label, timer.elapsed_seconds)
 
     with timed_block("mp_inverse", logger if cfg.benchmark.enabled else None) as timer:
-        if cfg.mp_inverse.compare_all_methods:
-            methods = available_inverse_methods()
-        else:
-            methods = cfg.mp_inverse.compare_methods or [cfg.mp_inverse.method]
+        methods = resolve_inverse_methods(cfg.mp_inverse)
         inverse_results = compare_inverse_methods(
             observed=empirical_density,
             aspect_ratio=aspect_ratio,
@@ -125,10 +136,11 @@ def run_full_pipeline(config_path: str | Path) -> dict[str, Any]:
     _timer_store(timers, timer.label, timer.elapsed_seconds)
 
     with timed_block("reference_population", logger if cfg.benchmark.enabled else None) as timer:
+        # Reference "true" law is the integrated covariance over the full horizon.
         reference_population = integrated_population_spectrum(schedule)
         reference_population_density = reference_population.to_grid_density(
             grid,
-            bandwidth=cfg.analysis.empirical_density_bandwidth or cfg.plotting.density_bandwidth,
+            bandwidth=bandwidth,
         )
         reference_forward_result = compute_mp_forward(
             population=reference_population,
@@ -149,7 +161,7 @@ def run_full_pipeline(config_path: str | Path) -> dict[str, Any]:
         estimated_density = discrete_to_grid(
             result.estimated_population,
             grid,
-            bandwidth=cfg.analysis.empirical_density_bandwidth or cfg.plotting.density_bandwidth,
+            bandwidth=bandwidth,
         )
 
         pop_metrics = compare_grid_densities(reference_population_density, estimated_density)
@@ -200,7 +212,7 @@ def run_full_pipeline(config_path: str | Path) -> dict[str, Any]:
     primary_estimated_density = discrete_to_grid(
         primary_result.estimated_population,
         grid,
-        bandwidth=cfg.analysis.empirical_density_bandwidth or cfg.plotting.density_bandwidth,
+        bandwidth=bandwidth,
     )
 
     if cfg.global_settings.save_arrays:
@@ -283,7 +295,7 @@ def run_full_pipeline(config_path: str | Path) -> dict[str, Any]:
                 discrete_to_grid(
                     inverse_results[name].estimated_population,
                     grid,
-                    bandwidth=cfg.analysis.empirical_density_bandwidth or cfg.plotting.density_bandwidth,
+                    bandwidth=bandwidth,
                 )
                 for name in df_summary["method"].tolist()
             ],
@@ -305,7 +317,9 @@ def run_full_pipeline(config_path: str | Path) -> dict[str, Any]:
     )
 
     metadata = {
+        "runner": "full-pipeline",
         "config_path": str(config_path),
+        "seed": cfg.global_settings.seed,
         "aspect_ratio_c": float(aspect_ratio),
         "methods": methods,
         "primary_method": primary_method,
@@ -331,5 +345,19 @@ def run_full_pipeline(config_path: str | Path) -> dict[str, Any]:
         "reconstruction_l2": _float(primary_row["reconstruction_l2"]),
         "output_dir": str(out_dir),
     }
+
+    if summary["reconstruction_l2"] > 0.15:
+        logger.warning(
+            "High reconstruction L2 (%.3f). Inverse recovery may be numerically unstable for this sample.",
+            summary["reconstruction_l2"],
+        )
+    if df_summary.shape[0] >= 2:
+        w1_spread = float(df_summary["population_wasserstein_1"].max() - df_summary["population_wasserstein_1"].min())
+        if w1_spread > 0.25:
+            logger.warning(
+                "Inverse methods disagree on recovered population law (W1 spread=%.3f).",
+                w1_spread,
+            )
+
     log_summary(logger, "Full pipeline summary", summary)
     return summary

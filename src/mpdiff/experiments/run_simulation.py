@@ -138,6 +138,7 @@ def run_simulation(config_path: str | Path) -> dict[str, Any]:
             plt.show()
 
     metadata: dict[str, Any] = {
+        "runner": "simulation",
         "config_path": str(config_path),
         "seed": cfg.global_settings.seed,
         "dimension": cfg.simulation.d,

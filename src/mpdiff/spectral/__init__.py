@@ -20,7 +20,13 @@ from .empirical import (
     realized_covariance,
     realized_covariance_from_increments,
 )
-from .inverse import InversionResult, available_inverse_methods, compare_inverse_methods, invert_mp_density
+from .inverse import (
+    InversionResult,
+    available_inverse_methods,
+    compare_inverse_methods,
+    invert_mp_density,
+    resolve_inverse_methods,
+)
 from .metrics import SpectrumComparison, compare_grid_densities
 from .transforms import MPForwardResult, compute_mp_forward, mp_forward_transform
 
@@ -48,6 +54,7 @@ __all__ = [
     "invert_mp_density",
     "compare_inverse_methods",
     "available_inverse_methods",
+    "resolve_inverse_methods",
     "SpectrumComparison",
     "compare_grid_densities",
 ]

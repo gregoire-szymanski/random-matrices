@@ -14,32 +14,42 @@ from mpdiff.plotting.spectra import plot_density_comparison
 from mpdiff.spectral.grids import make_linear_grid
 from mpdiff.utils.logging_utils import setup_logging
 from mpdiff.utils.random import make_rng
+from mpdiff.utils.timers import timed_block
 
 from .common import build_population_spectrum, ensure_output_dir, log_summary, resolve_aspect_ratio, save_density
 from .inversion_benchmark import benchmark_inverse_methods_from_population
 
 
 def run_inversion_benchmark(config_path: str | Path) -> dict[str, Any]:
-    """Benchmark all/selected inversion methods on one config-driven benchmark law."""
+    """Benchmark all/selected inversion methods on one config-driven benchmark law.
+
+    The benchmark law is built from the config, pushed through MP forward map,
+    then each inverse method is evaluated on runtime and reconstruction quality.
+    """
     cfg = load_config(config_path)
     setup_logging(cfg.global_settings.log_level)
     logger = logging.getLogger("mpdiff.experiments.run_inversion_benchmark")
     out_dir = ensure_output_dir(cfg)
+    timers: dict[str, float] = {}
 
-    rng = make_rng(cfg.global_settings.seed)
-    population = build_population_spectrum(cfg, rng)
-    aspect_ratio = resolve_aspect_ratio(cfg)
-    grid = make_linear_grid(cfg.mp_forward.grid_min, cfg.mp_forward.grid_max, cfg.mp_forward.num_points)
+    with timed_block("benchmark_setup", logger if cfg.benchmark.enabled else None) as timer:
+        rng = make_rng(cfg.global_settings.seed)
+        population = build_population_spectrum(cfg, rng)
+        aspect_ratio = resolve_aspect_ratio(cfg)
+        grid = make_linear_grid(cfg.mp_forward.grid_min, cfg.mp_forward.grid_max, cfg.mp_forward.num_points)
+    timers[timer.label] = timer.elapsed_seconds
 
-    benchmark = benchmark_inverse_methods_from_population(
-        population=population,
-        aspect_ratio=aspect_ratio,
-        grid=grid,
-        forward_settings=cfg.mp_forward,
-        inverse_settings=cfg.mp_inverse,
-        methods=None,
-        density_bandwidth=cfg.analysis.empirical_density_bandwidth or cfg.plotting.density_bandwidth,
-    )
+    with timed_block("inversion_benchmark_core", logger if cfg.benchmark.enabled else None) as timer:
+        benchmark = benchmark_inverse_methods_from_population(
+            population=population,
+            aspect_ratio=aspect_ratio,
+            grid=grid,
+            forward_settings=cfg.mp_forward,
+            inverse_settings=cfg.mp_inverse,
+            methods=None,
+            density_bandwidth=cfg.analysis.empirical_density_bandwidth or cfg.plotting.density_bandwidth,
+        )
+    timers[timer.label] = timer.elapsed_seconds
 
     summary_df = benchmark.summary_table
     if summary_df.empty:
@@ -70,7 +80,7 @@ def run_inversion_benchmark(config_path: str | Path) -> dict[str, Any]:
         fig, _ = plot_density_comparison(
             densities=[observed] + [benchmark.method_results[m]["inversion"].reconstructed_observed for m in methods],
             labels=["observed"] + [f"reconstructed ({m})" for m in methods],
-            title="Inversion Benchmark: Observed vs Reconstructed",
+            title=f"Inversion Benchmark: Observed vs Reconstructed (c={aspect_ratio:.3f})",
             figsize=cfg.plotting.figsize,
         )
         fig.savefig(out_dir / "inversion_benchmark_reconstruction.png", dpi=cfg.plotting.dpi)
@@ -105,13 +115,22 @@ def run_inversion_benchmark(config_path: str | Path) -> dict[str, Any]:
         "n_methods": int(summary_df.shape[0]),
     }
 
+    if summary["best_population_wasserstein_1"] > 0.2:
+        logger.warning(
+            "Best benchmark population W1 is %.3f (>0.2). Recovery quality may be poor.",
+            summary["best_population_wasserstein_1"],
+        )
+
     if cfg.global_settings.save_metadata:
         with (out_dir / "inversion_benchmark_metadata.json").open("w", encoding="utf-8") as handle:
             json.dump(
                 {
+                    "runner": "inversion-benchmark",
                     "config_path": str(config_path),
+                    "seed": cfg.global_settings.seed,
                     "summary": summary,
                     "methods": benchmark.methods,
+                    "timers_seconds": timers,
                 },
                 handle,
                 indent=2,
