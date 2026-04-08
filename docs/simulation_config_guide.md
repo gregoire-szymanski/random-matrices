@@ -172,7 +172,26 @@ The simulation runner writes:
 - optional plots,
 - metadata with timers and summary statistics.
 
-## 8. Example Catalog
+## 8. Full-Pipeline Analysis Settings
+
+For `full-pipeline` / `end-to-end` runs, the `analysis` section supports:
+
+```yaml
+analysis:
+  realized_covariance_normalization: total_time
+  empirical_density_bandwidth: null
+  empirical_histogram_bins: 50
+```
+
+- `realized_covariance_normalization`:
+  - `total_time` (standard),
+  - `n_steps`,
+  - `n_steps_minus_one`,
+  - `none`.
+- `empirical_density_bandwidth`: optional KDE bandwidth override for realized/reference densities.
+- `empirical_histogram_bins`: histogram bins in end-to-end comparison plots.
+
+## 9. Example Catalog
 
 Use:
 

@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="mpdiff experiment runner")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    for command in ["simulation", "mp-forward", "mp-inverse", "full-pipeline"]:
+    for command in ["simulation", "mp-forward", "mp-inverse", "full-pipeline", "end-to-end"]:
         sub = subparsers.add_parser(command)
         sub.add_argument("--config", type=Path, required=True, help="Path to YAML/TOML config")
 
@@ -33,7 +33,7 @@ def main() -> None:
         run_mp_forward(args.config)
     elif args.command == "mp-inverse":
         run_mp_inverse(args.config)
-    elif args.command == "full-pipeline":
+    elif args.command in {"full-pipeline", "end-to-end"}:
         run_full_pipeline(args.config)
     else:
         raise ValueError(f"Unknown command: {args.command}")

@@ -22,6 +22,7 @@ mpdiff simulation --config configs/simulation_examples/01_constant_isotropic.yam
 mpdiff mp-forward --config configs/spectral_examples/01_dirac_forward_inverse.yaml
 mpdiff mp-inverse --config configs/spectral_examples/02_atomic_mixture_compare_methods.yaml
 mpdiff full-pipeline --config configs/simulation_examples/05_piecewise_two_segments.yaml
+mpdiff end-to-end --config configs/simulation_examples/05_piecewise_two_segments.yaml
 ```
 
 ## Project Layout
@@ -103,6 +104,7 @@ Each YAML file includes inline comments.
 
 - `notebooks/01_mp_forward_inverse_demo.ipynb`
 - `notebooks/spectral_examples/*.ipynb` (one notebook per spectral example config)
+- `notebooks/end_to_end_examples/*.ipynb` (end-to-end simulation -> inversion workflows)
 
 ## Outputs
 
@@ -113,12 +115,19 @@ Runners save arrays, plots, and metadata JSON under `global.output_dir`, includi
 - diagnostics and discrepancy metrics (L1/L2/Wasserstein/support/moments),
 - comparison plots and optional convergence plots.
 
+The end-to-end runner also writes:
+
+- `full_pipeline_method_summary.csv`
+- `full_pipeline_method_summary.json`
+- `full_pipeline_report.txt`
+
 ## Docs
 
 - `docs/architecture.md`
 - `docs/simulation_config_guide.md`
 - `docs/spectral_config_guide.md`
 - `docs/numerics.md`
+- `docs/end_to_end_pipeline.md`
 
 ## Tests
 

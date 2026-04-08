@@ -343,3 +343,25 @@ def validate_config(cfg: ProjectConfig) -> None:
 
     if cfg.analysis.population_spectrum is not None:
         _validate_population_spectrum(cfg.analysis.population_spectrum)
+
+    if cfg.volatility.mode == "piecewise" and cfg.volatility.segments:
+        if not 0 <= cfg.analysis.reference_segment_index < len(cfg.volatility.segments):
+            raise ConfigValidationError(
+                "analysis.reference_segment_index is out of range for volatility.segments"
+            )
+
+    if cfg.analysis.realized_covariance_normalization not in {
+        "total_time",
+        "n_steps",
+        "n_steps_minus_one",
+        "none",
+    }:
+        raise ConfigValidationError(
+            "analysis.realized_covariance_normalization must be one of "
+            "total_time, n_steps, n_steps_minus_one, none"
+        )
+
+    if cfg.analysis.empirical_density_bandwidth is not None and cfg.analysis.empirical_density_bandwidth <= 0:
+        raise ConfigValidationError("analysis.empirical_density_bandwidth must be positive when provided")
+    if cfg.analysis.empirical_histogram_bins <= 0:
+        raise ConfigValidationError("analysis.empirical_histogram_bins must be positive")

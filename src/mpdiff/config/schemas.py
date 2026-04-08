@@ -258,6 +258,9 @@ class AnalysisConfig:
     population_model: CovarianceModelConfig | None = None
     population_spectrum: PopulationSpectrumConfig | None = None
     reference_segment_index: int = 0
+    realized_covariance_normalization: str = "total_time"  # total_time | n_steps | n_steps_minus_one | none
+    empirical_density_bandwidth: float | None = None
+    empirical_histogram_bins: int = 50
 
 
 @dataclass(slots=True)
@@ -648,5 +651,12 @@ def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
             if analysis_data.get("population_spectrum") is not None
             else None,
             reference_segment_index=int(analysis_data.get("reference_segment_index", 0)),
+            realized_covariance_normalization=str(analysis_data.get("realized_covariance_normalization", "total_time")),
+            empirical_density_bandwidth=(
+                float(analysis_data["empirical_density_bandwidth"])
+                if analysis_data.get("empirical_density_bandwidth") is not None
+                else None
+            ),
+            empirical_histogram_bins=int(analysis_data.get("empirical_histogram_bins", 50)),
         ),
     )

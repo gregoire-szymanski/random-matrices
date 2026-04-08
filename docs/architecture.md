@@ -23,6 +23,11 @@ Typical full-pipeline flow:
 6. Compare estimated population law with reference/integrated population law.
 7. Save artifacts and plots.
 
+The same flow is exposed by both runners:
+
+- `experiments/run_full_pipeline.py`
+- `experiments/run_end_to_end.py` (explicit alias)
+
 ## Extensibility
 
 - Add new covariance models by extending `build_covariance_matrix`.
