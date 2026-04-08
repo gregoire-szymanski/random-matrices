@@ -1,0 +1,65 @@
+# Example 3: continuous gamma population law.
+# The law is discretized to n_atoms before applying MP forward transform.
+global:
+  seed: 7
+  output_dir: outputs/spectral_examples/03_gamma
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 100
+  T: 1.0
+  n_steps: 380
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    scalar: 1.0
+
+mp_forward:
+  aspect_ratio: 0.26
+  grid_min: 0.0
+  grid_max: 7.0
+  num_points: 600
+  eta: 0.004
+  tol: 1.0e-9
+  max_iter: 600
+  damping: 0.72
+
+mp_inverse:
+  method: optimization
+  compare_methods: [optimization, moment_based]
+  n_support: 60
+  support_min: 0.05
+  support_max: 5.0
+  eta: 0.004
+  tol: 1.0e-6
+  max_iter: 320
+  regularization: 1.0e-3
+  optimizer_max_iter: 120
+  forward_max_iter: 250
+  forward_tol: 1.0e-7
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  population_spectrum:
+    source: parametric
+    kind: gamma
+    params:
+      shape: 2.5
+      scale: 0.6
+    # Number of atoms used to discretize the continuous law.
+    n_atoms: 500

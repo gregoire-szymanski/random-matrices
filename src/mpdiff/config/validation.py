@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from .schemas import CovarianceModelConfig, DriftConfig, EigenDistributionConfig, ProjectConfig
+from .schemas import (
+    CovarianceModelConfig,
+    DriftConfig,
+    EigenDistributionConfig,
+    PopulationSpectrumConfig,
+    ProjectConfig,
+)
 
 
 class ConfigValidationError(ValueError):
@@ -147,6 +153,68 @@ def _validate_segments_cover_horizon(segments: Iterable, horizon: float) -> None
         raise ConfigValidationError("volatility.segments must end exactly at simulation.T")
 
 
+def _validate_population_spectrum(cfg: PopulationSpectrumConfig) -> None:
+    sources = {"from_covariance_model", "parametric", "atomic", "grid", "empirical"}
+    if cfg.source not in sources:
+        raise ConfigValidationError(f"analysis.population_spectrum.source unsupported: {cfg.source}")
+
+    if cfg.n_atoms <= 0:
+        raise ConfigValidationError("analysis.population_spectrum.n_atoms must be positive")
+
+    if cfg.source == "parametric":
+        allowed = {"dirac", "dirac_mixture", "uniform", "gamma", "rescaled_beta"}
+        if cfg.kind not in allowed:
+            raise ConfigValidationError(f"analysis.population_spectrum.kind unsupported: {cfg.kind}")
+        dist = EigenDistributionConfig(
+            kind=cfg.kind,
+            value=float(cfg.params.get("value", 1.0)),
+            values=[float(v) for v in cfg.params.get("values", [])],
+            weights=[float(w) for w in cfg.params.get("weights", [])],
+            low=float(cfg.params.get("low", 0.5)),
+            high=float(cfg.params.get("high", 1.5)),
+            shape=float(cfg.params.get("shape", 2.0)),
+            scale=float(cfg.params.get("scale", 1.0)),
+            alpha=float(cfg.params.get("alpha", 2.0)),
+            beta=float(cfg.params.get("beta", 5.0)),
+            beta_scale=float(cfg.params.get("beta_scale", cfg.params.get("scale", 1.0))),
+            beta_shift=float(cfg.params.get("beta_shift", cfg.params.get("shift", 0.0))),
+        )
+        _validate_distribution(dist, "analysis.population_spectrum.params")
+        return
+
+    if cfg.source == "atomic":
+        if not cfg.atoms:
+            raise ConfigValidationError("analysis.population_spectrum.atoms must be non-empty for source=atomic")
+        if any(v < 0 for v in cfg.atoms):
+            raise ConfigValidationError("analysis.population_spectrum.atoms must be non-negative")
+        if cfg.weights and len(cfg.weights) != len(cfg.atoms):
+            raise ConfigValidationError("analysis.population_spectrum.weights length must match atoms length")
+        if cfg.weights and sum(cfg.weights) <= 0:
+            raise ConfigValidationError("analysis.population_spectrum.weights must have positive sum")
+        return
+
+    if cfg.source == "grid":
+        if len(cfg.grid) < 2:
+            raise ConfigValidationError("analysis.population_spectrum.grid must contain at least two points")
+        if len(cfg.density) != len(cfg.grid):
+            raise ConfigValidationError("analysis.population_spectrum.density must match grid length")
+        if any(b <= a for a, b in zip(cfg.grid[:-1], cfg.grid[1:])):
+            raise ConfigValidationError("analysis.population_spectrum.grid must be strictly increasing")
+        if any(v < 0 for v in cfg.density):
+            raise ConfigValidationError("analysis.population_spectrum.density must be non-negative")
+        if sum(cfg.density) <= 0:
+            raise ConfigValidationError("analysis.population_spectrum.density must have positive mass")
+        return
+
+    if cfg.source == "empirical":
+        if not cfg.eigenvalues and not cfg.eigenvalues_path:
+            raise ConfigValidationError(
+                "analysis.population_spectrum requires eigenvalues or eigenvalues_path for source=empirical"
+            )
+        if cfg.eigenvalues and any(v < 0 for v in cfg.eigenvalues):
+            raise ConfigValidationError("analysis.population_spectrum.eigenvalues must be non-negative")
+
+
 def validate_config(cfg: ProjectConfig) -> None:
     """Validate a project configuration in-place.
 
@@ -220,8 +288,58 @@ def validate_config(cfg: ProjectConfig) -> None:
         raise ConfigValidationError("mp_forward.grid_max must be > grid_min")
     if cfg.mp_forward.eta <= 0:
         raise ConfigValidationError("mp_forward.eta must be positive")
+    if cfg.mp_forward.aspect_ratio is not None and cfg.mp_forward.aspect_ratio <= 0:
+        raise ConfigValidationError("mp_forward.aspect_ratio must be positive when provided")
 
-    if cfg.mp_inverse.method not in {"fixed_point", "optimization", "stieltjes_based", "moment_based"}:
+    supported_inverse_methods = {"fixed_point", "optimization", "stieltjes_based", "moment_based"}
+    if cfg.mp_inverse.method not in supported_inverse_methods:
         raise ConfigValidationError("mp_inverse.method is invalid")
     if cfg.mp_inverse.n_support <= 2:
         raise ConfigValidationError("mp_inverse.n_support must be > 2")
+    if cfg.mp_inverse.support_min is not None and cfg.mp_inverse.support_min <= 0:
+        raise ConfigValidationError("mp_inverse.support_min must be positive when provided")
+    if cfg.mp_inverse.support_max is not None and cfg.mp_inverse.support_max <= 0:
+        raise ConfigValidationError("mp_inverse.support_max must be positive when provided")
+    if (
+        cfg.mp_inverse.support_min is not None
+        and cfg.mp_inverse.support_max is not None
+        and cfg.mp_inverse.support_max <= cfg.mp_inverse.support_min
+    ):
+        raise ConfigValidationError("mp_inverse.support_max must be greater than support_min")
+    if cfg.mp_inverse.eta <= 0:
+        raise ConfigValidationError("mp_inverse.eta must be positive")
+    if cfg.mp_inverse.tol <= 0:
+        raise ConfigValidationError("mp_inverse.tol must be positive")
+    if cfg.mp_inverse.max_iter <= 0:
+        raise ConfigValidationError("mp_inverse.max_iter must be positive")
+    if cfg.mp_inverse.regularization < 0:
+        raise ConfigValidationError("mp_inverse.regularization must be non-negative")
+    if cfg.mp_inverse.optimizer_max_iter <= 0:
+        raise ConfigValidationError("mp_inverse.optimizer_max_iter must be positive")
+    if cfg.mp_inverse.forward_max_iter <= 0:
+        raise ConfigValidationError("mp_inverse.forward_max_iter must be positive")
+    if cfg.mp_inverse.forward_tol <= 0:
+        raise ConfigValidationError("mp_inverse.forward_tol must be positive")
+
+    for idx, method_name in enumerate(cfg.mp_inverse.compare_methods):
+        if method_name not in supported_inverse_methods:
+            raise ConfigValidationError(f"mp_inverse.compare_methods[{idx}] is invalid: {method_name}")
+
+    if not 0 <= cfg.mp_inverse.fixed_point.smoothing_strength <= 1:
+        raise ConfigValidationError("mp_inverse.fixed_point.smoothing_strength must be in [0, 1]")
+    if cfg.mp_inverse.fixed_point.min_kernel_density <= 0:
+        raise ConfigValidationError("mp_inverse.fixed_point.min_kernel_density must be positive")
+
+    if cfg.mp_inverse.optimization.max_iter <= 0:
+        raise ConfigValidationError("mp_inverse.optimization.max_iter must be positive")
+
+    if not 0 <= cfg.mp_inverse.stieltjes_based.quantile_min < cfg.mp_inverse.stieltjes_based.quantile_max <= 1:
+        raise ConfigValidationError("mp_inverse.stieltjes_based quantiles must satisfy 0<=min<max<=1")
+
+    if cfg.mp_inverse.moment_based.family not in {"gamma"}:
+        raise ConfigValidationError("mp_inverse.moment_based.family currently supports only 'gamma'")
+    if cfg.mp_inverse.moment_based.min_variance <= 0:
+        raise ConfigValidationError("mp_inverse.moment_based.min_variance must be positive")
+
+    if cfg.analysis.population_spectrum is not None:
+        _validate_population_spectrum(cfg.analysis.population_spectrum)

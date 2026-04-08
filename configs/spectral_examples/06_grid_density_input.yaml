@@ -1,0 +1,63 @@
+# Example 6: population law provided as a sampled density on a grid.
+# Density values are normalized automatically by GridDensity.
+global:
+  seed: 515
+  output_dir: outputs/spectral_examples/06_grid_density
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 70
+  T: 1.0
+  n_steps: 280
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    scalar: 1.0
+
+mp_forward:
+  aspect_ratio: 0.25
+  grid_min: 0.0
+  grid_max: 4.5
+  num_points: 500
+  eta: 0.003
+  tol: 1.0e-9
+  max_iter: 500
+  damping: 0.72
+
+mp_inverse:
+  method: optimization
+  compare_methods: [optimization, fixed_point]
+  n_support: 50
+  support_min: 0.05
+  support_max: 3.0
+  eta: 0.003
+  tol: 1.0e-6
+  max_iter: 320
+  regularization: 1.0e-3
+  optimizer_max_iter: 90
+  forward_max_iter: 220
+  forward_tol: 1.0e-7
+
+plotting:
+  style: default
+  figsize: [9, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  population_spectrum:
+    source: grid
+    # Simple smooth hump near 1.2 with right tail.
+    grid: [0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 2.0, 2.3, 2.6, 3.0]
+    density: [0.1, 0.25, 0.55, 0.8, 0.75, 0.5, 0.35, 0.2, 0.1, 0.03]
+    n_atoms: 400

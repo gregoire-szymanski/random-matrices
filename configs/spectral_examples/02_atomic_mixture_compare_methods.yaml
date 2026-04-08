@@ -1,0 +1,69 @@
+# Example 2: finite atomic population law (Dirac mixture)
+# Good for comparing inverse methods on a non-trivial multimodal spectrum.
+global:
+  seed: 2026
+  output_dir: outputs/spectral_examples/02_atomic_mixture
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 120
+  T: 1.0
+  n_steps: 400
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    scalar: 1.0
+
+mp_forward:
+  aspect_ratio: 0.30
+  grid_min: 0.0
+  grid_max: 5.5
+  num_points: 550
+  eta: 0.003
+  tol: 1.0e-9
+  max_iter: 550
+  damping: 0.72
+
+mp_inverse:
+  method: optimization
+  compare_methods: [optimization, fixed_point, stieltjes_based, moment_based]
+  n_support: 55
+  support_min: 0.1
+  support_max: 3.5
+  eta: 0.0035
+  tol: 1.0e-6
+  max_iter: 350
+  regularization: 7.0e-4
+  optimizer_max_iter: 120
+  forward_max_iter: 260
+  forward_tol: 1.0e-7
+  fixed_point:
+    smoothing_strength: 0.10
+  stieltjes_based:
+    quantile_min: 0.03
+    quantile_max: 0.97
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  population_spectrum:
+    source: parametric
+    kind: dirac_mixture
+    params:
+      values: [0.5, 1.1, 2.0, 3.0]
+      weights: [0.2, 0.35, 0.3, 0.15]
+    n_atoms: 4

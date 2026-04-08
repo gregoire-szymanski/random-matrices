@@ -42,6 +42,26 @@ def plot_density_comparison(
     return fig, ax
 
 
+def plot_population_forward_recovered(
+    population_density: GridDensity,
+    forward_density: GridDensity,
+    recovered_density: GridDensity | None = None,
+    figsize: tuple[float, float] = (9, 5),
+    title: str = "Population, MP Forward, and Recovered Densities",
+) -> tuple[plt.Figure, plt.Axes]:
+    """Plot population, forward, and optional recovered densities."""
+    fig, ax = plt.subplots(figsize=figsize)
+    plot_grid_density(population_density, ax=ax, label="population")
+    plot_grid_density(forward_density, ax=ax, label="MP forward")
+    if recovered_density is not None:
+        plot_grid_density(recovered_density, ax=ax, label="inverse recovered")
+    ax.set_title(title)
+    ax.grid(alpha=0.2)
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    return fig, ax
+
+
 def plot_discrete_spectrum(
     spectrum: DiscreteSpectrum,
     ax: plt.Axes | None = None,

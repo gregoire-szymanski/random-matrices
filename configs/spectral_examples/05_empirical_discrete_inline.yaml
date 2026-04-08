@@ -1,0 +1,60 @@
+# Example 5: empirical discrete law from sampled eigenvalues provided inline.
+# This emulates loading a population law from externally sampled eigenvalues.
+global:
+  seed: 314
+  output_dir: outputs/spectral_examples/05_empirical_inline
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 60
+  T: 1.0
+  n_steps: 260
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    scalar: 1.0
+
+mp_forward:
+  aspect_ratio: 0.23
+  grid_min: 0.0
+  grid_max: 4.0
+  num_points: 450
+  eta: 0.003
+  tol: 1.0e-9
+  max_iter: 450
+  damping: 0.7
+
+mp_inverse:
+  method: fixed_point
+  compare_methods: [fixed_point, optimization]
+  n_support: 45
+  support_min: 0.1
+  support_max: 2.8
+  eta: 0.003
+  tol: 1.0e-6
+  max_iter: 280
+  regularization: 1.0e-3
+  optimizer_max_iter: 90
+  forward_max_iter: 220
+  forward_tol: 1.0e-7
+
+plotting:
+  style: default
+  figsize: [9, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  population_spectrum:
+    source: empirical
+    eigenvalues: [0.45, 0.52, 0.63, 0.81, 0.93, 1.05, 1.21, 1.4, 1.7, 2.1]

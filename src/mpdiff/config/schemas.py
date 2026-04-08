@@ -159,10 +159,43 @@ class MPForwardConfig:
 
 
 @dataclass(slots=True)
+class InverseFixedPointMethodConfig:
+    """Method-specific options for fixed-point inverse."""
+
+    smoothing_strength: float = 0.08
+    min_kernel_density: float = 1e-16
+
+
+@dataclass(slots=True)
+class InverseOptimizationMethodConfig:
+    """Method-specific options for optimization inverse."""
+
+    optimizer: str = "L-BFGS-B"
+    max_iter: int = 120
+
+
+@dataclass(slots=True)
+class InverseStieltjesMethodConfig:
+    """Method-specific options for Stieltjes-based inverse."""
+
+    quantile_min: float = 0.02
+    quantile_max: float = 0.98
+
+
+@dataclass(slots=True)
+class InverseMomentMethodConfig:
+    """Method-specific options for moment-based inverse."""
+
+    family: str = "gamma"
+    min_variance: float = 1e-10
+
+
+@dataclass(slots=True)
 class MPInverseConfig:
     """Numerical parameters for MP inverse procedures."""
 
     method: str = "optimization"  # optimization | fixed_point | stieltjes_based | moment_based
+    compare_methods: list[str] = field(default_factory=list)
     n_support: int = 50
     support_min: float | None = None
     support_max: float | None = None
@@ -173,6 +206,10 @@ class MPInverseConfig:
     optimizer_max_iter: int = 120
     forward_max_iter: int = 250
     forward_tol: float = 1e-7
+    fixed_point: InverseFixedPointMethodConfig = field(default_factory=InverseFixedPointMethodConfig)
+    optimization: InverseOptimizationMethodConfig = field(default_factory=InverseOptimizationMethodConfig)
+    stieltjes_based: InverseStieltjesMethodConfig = field(default_factory=InverseStieltjesMethodConfig)
+    moment_based: InverseMomentMethodConfig = field(default_factory=InverseMomentMethodConfig)
 
 
 @dataclass(slots=True)
@@ -199,10 +236,27 @@ class BenchmarkConfig:
 
 
 @dataclass(slots=True)
+class PopulationSpectrumConfig:
+    """Optional direct spectral-law input for MP forward/inverse experiments."""
+
+    source: str = "from_covariance_model"  # from_covariance_model | parametric | atomic | grid | empirical
+    kind: str = "dirac"  # for source=parametric
+    params: dict[str, Any] = field(default_factory=dict)
+    atoms: list[float] = field(default_factory=list)
+    weights: list[float] = field(default_factory=list)
+    grid: list[float] = field(default_factory=list)
+    density: list[float] = field(default_factory=list)
+    eigenvalues: list[float] = field(default_factory=list)
+    eigenvalues_path: str | None = None
+    n_atoms: int = 400
+
+
+@dataclass(slots=True)
 class AnalysisConfig:
     """Optional analysis-specific settings."""
 
     population_model: CovarianceModelConfig | None = None
+    population_spectrum: PopulationSpectrumConfig | None = None
     reference_segment_index: int = 0
 
 
@@ -420,6 +474,74 @@ def _parse_volatility(data: Mapping[str, Any]) -> VolatilityConfig:
     )
 
 
+def _parse_inverse_fixed_point(data: Mapping[str, Any] | None) -> InverseFixedPointMethodConfig:
+    data = dict(_mapping(data))
+    return InverseFixedPointMethodConfig(
+        smoothing_strength=float(data.get("smoothing_strength", 0.08)),
+        min_kernel_density=float(data.get("min_kernel_density", 1e-16)),
+    )
+
+
+def _parse_inverse_optimization(data: Mapping[str, Any] | None) -> InverseOptimizationMethodConfig:
+    data = dict(_mapping(data))
+    return InverseOptimizationMethodConfig(
+        optimizer=str(data.get("optimizer", "L-BFGS-B")),
+        max_iter=int(data.get("max_iter", data.get("optimizer_max_iter", 120))),
+    )
+
+
+def _parse_inverse_stieltjes(data: Mapping[str, Any] | None) -> InverseStieltjesMethodConfig:
+    data = dict(_mapping(data))
+    return InverseStieltjesMethodConfig(
+        quantile_min=float(data.get("quantile_min", 0.02)),
+        quantile_max=float(data.get("quantile_max", 0.98)),
+    )
+
+
+def _parse_inverse_moment(data: Mapping[str, Any] | None) -> InverseMomentMethodConfig:
+    data = dict(_mapping(data))
+    return InverseMomentMethodConfig(
+        family=str(data.get("family", "gamma")),
+        min_variance=float(data.get("min_variance", 1e-10)),
+    )
+
+
+def _parse_population_spectrum(data: Mapping[str, Any] | None) -> PopulationSpectrumConfig:
+    data = dict(_mapping(data))
+    params = dict(_mapping(data.get("params")))
+
+    # Allow user-friendly inline parameter declarations.
+    for key in (
+        "value",
+        "values",
+        "weights",
+        "low",
+        "high",
+        "shape",
+        "scale",
+        "alpha",
+        "beta",
+        "shift",
+        "beta_shift",
+        "beta_scale",
+    ):
+        if key in data and key not in params:
+            params[key] = data[key]
+
+    return PopulationSpectrumConfig(
+        source=str(data.get("source", "from_covariance_model")),
+        kind=str(data.get("kind", "dirac")),
+        params=params,
+        atoms=_float_list(data.get("atoms")),
+        weights=_float_list(data.get("weights")),
+        grid=_float_list(data.get("grid")),
+        density=_float_list(data.get("density")),
+        eigenvalues=_float_list(data.get("eigenvalues")),
+        eigenvalues_path=str(data["eigenvalues_path"]) if data.get("eigenvalues_path") is not None else None,
+        n_atoms=int(data.get("n_atoms", 400)),
+    )
+
+
 def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
     """Build :class:`ProjectConfig` from a dictionary representation."""
     global_data = dict(_mapping(data.get("global")))
@@ -441,6 +563,12 @@ def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
         if isinstance(initial_state_raw, (int, float))
         else _float_list(initial_state_raw)
     )
+
+    compare_methods_raw = inv_data.get("compare_methods", [])
+    if isinstance(compare_methods_raw, str):
+        compare_methods = [compare_methods_raw]
+    else:
+        compare_methods = [str(m) for m in compare_methods_raw]
 
     return ProjectConfig(
         global_settings=GlobalConfig(
@@ -479,6 +607,7 @@ def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
         ),
         mp_inverse=MPInverseConfig(
             method=str(inv_data.get("method", "optimization")),
+            compare_methods=compare_methods,
             n_support=int(inv_data.get("n_support", 50)),
             support_min=float(inv_data["support_min"]) if inv_data.get("support_min") is not None else None,
             support_max=float(inv_data["support_max"]) if inv_data.get("support_max") is not None else None,
@@ -489,6 +618,10 @@ def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
             optimizer_max_iter=int(inv_data.get("optimizer_max_iter", 120)),
             forward_max_iter=int(inv_data.get("forward_max_iter", 250)),
             forward_tol=float(inv_data.get("forward_tol", 1e-7)),
+            fixed_point=_parse_inverse_fixed_point(inv_data.get("fixed_point")),
+            optimization=_parse_inverse_optimization(inv_data.get("optimization")),
+            stieltjes_based=_parse_inverse_stieltjes(inv_data.get("stieltjes_based")),
+            moment_based=_parse_inverse_moment(inv_data.get("moment_based")),
         ),
         plotting=PlottingConfig(
             style=str(plot_data.get("style", "default")),
@@ -510,6 +643,9 @@ def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
         analysis=AnalysisConfig(
             population_model=_parse_covariance_model(analysis_data["population_model"])
             if analysis_data.get("population_model") is not None
+            else None,
+            population_spectrum=_parse_population_spectrum(analysis_data.get("population_spectrum"))
+            if analysis_data.get("population_spectrum") is not None
             else None,
             reference_segment_index=int(analysis_data.get("reference_segment_index", 0)),
         ),

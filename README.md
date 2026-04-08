@@ -1,8 +1,11 @@
 # mpdiff
 
-`mpdiff` provides production-quality simulation tooling for high-dimensional diffusions with piecewise-constant volatility and configurable covariance models.
+`mpdiff` is a Python 3.11+ project for:
 
-This README focuses on the simulation and configuration system.
+- simulating high-dimensional diffusions with piecewise-constant volatility,
+- computing realized covariance spectra,
+- applying the Marcenko-Pastur (MP) forward transform,
+- approximately inverting the MP map with multiple numerical methods.
 
 ## Installation
 
@@ -12,119 +15,109 @@ source .venv/bin/activate
 pip install -e .[dev]
 ```
 
-## Run a Simulation
-
-Use the CLI simulation runner:
+## CLI
 
 ```bash
 mpdiff simulation --config configs/simulation_examples/01_constant_isotropic.yaml
+mpdiff mp-forward --config configs/spectral_examples/01_dirac_forward_inverse.yaml
+mpdiff mp-inverse --config configs/spectral_examples/02_atomic_mixture_compare_methods.yaml
+mpdiff full-pipeline --config configs/simulation_examples/05_piecewise_two_segments.yaml
 ```
 
-or
+## Project Layout
 
-```bash
-python -m mpdiff.cli simulation --config configs/simulation_examples/01_constant_isotropic.yaml
-```
+- `src/mpdiff/config/`: dataclass schemas, YAML/TOML loading, validation
+- `src/mpdiff/simulation/`: covariance builders, segment schedules, Euler simulation
+- `src/mpdiff/spectral/`: spectral laws, MP forward transform, inverse methods, metrics
+- `src/mpdiff/plotting/`: density/path/diagnostics plotting utilities
+- `src/mpdiff/experiments/`: runners for simulation, forward MP, inverse MP, and full pipeline
+- `configs/`: ready-to-run YAML configs
+- `notebooks/`: exploratory examples
+- `tests/`: unit and integration-style numerical tests
 
-## Simulation Model
+## Spectral Law Inputs
 
-The Euler scheme is:
+Population spectral laws can be represented as:
 
-`X_{t_{i+1}} = X_{t_i} + b_i * dt + sigma_i * sqrt(dt) * Z_i`, with `Z_i ~ N(0, I_d)`.
+- parametric laws (`dirac`, `dirac_mixture`, `uniform`, `gamma`, `rescaled_beta`),
+- discrete atomic laws,
+- sampled grid densities,
+- empirical discrete laws from sampled eigenvalues.
 
-- `sigma_i` is constant on each piecewise segment from config.
-- Drift supports `zero`, `constant`, `linear_mean_reversion`, `time_sine`, and optional imported `callable`.
+The core objects are:
 
-## YAML Config Structure
+- `DiscreteSpectrum`
+- `GridDensity`
+- `ParametricSpectrumLaw`
 
-Top-level sections:
+All can be converted to a discrete approximation used by MP numerics.
 
-- `global`: seed, output dir, logging, save switches.
-- `simulation`: `d`, `T`, `n_steps`, `initial_state`, `drift_model`, optional `time_grid`.
-- `volatility`: mode and covariance model definitions.
-- `plotting`: simulation plotting controls.
-- `benchmark`: timer logging switch.
+## MP Forward Map
 
-Volatility modes:
+Notation in code and docs: `c = d / n` (aspect ratio).
 
-1. `constant`
-2. `piecewise`
-3. `piecewise_scaled_base` (segment law `Cov_j = c_j * M_j`)
+The forward solver uses the Silverstein fixed-point equation for the Stieltjes transform
+`m_F(z)` with `z = x + i*eta`, then recovers density as:
 
-Covariance model kinds:
+`f_F(x) = Im(m_F(x+i*eta)) / pi`.
 
-1. `diag_scalar`: `Cov = lambda * I_d`
-2. `diag_distribution`: diagonal eigenvalues from one law
-3. `orthogonal_diag`: `Cov = U diag(lambda) U^T`
-4. `low_rank_plus_diag`: `Cov = B Sigma B^T + D`
+Implementation details:
 
-Supported diagonal/eigenvalue distributions:
+- damped fixed-point iterations,
+- continuation warm start along the real grid,
+- optional Newton fallback for difficult points,
+- diagnostics: convergence rates, residuals, iteration counts, fallback usage.
 
-- `dirac`
-- `dirac_mixture`
-- `uniform`
-- `gamma`
-- `rescaled_beta` (implemented as `beta_scale * Beta(alpha, beta) + beta_shift`)
+## MP Inverse Methods
 
-## Example Configs
+Available methods (switch with `mp_inverse.method`):
 
-All examples are in `configs/simulation_examples/` and include inline YAML comments:
+- `fixed_point`: Richardson-Lucy style deconvolution on MP Dirac kernels,
+- `optimization`: minimize forward mismatch over discretized population measure,
+- `stieltjes_based`: nonlinear shrinkage using estimated observed Stieltjes transform,
+- `moment_based`: low-order moment inversion with gamma-family approximation.
 
-1. `01_constant_isotropic.yaml`
-2. `02_constant_diag_gamma.yaml`
-3. `03_constant_rotated_haar.yaml`
-4. `04_low_rank_plus_diag.yaml`
-5. `05_piecewise_two_segments.yaml`
-6. `06_piecewise_scaled_base.yaml`
+Run several methods on the same input with `mp_inverse.compare_methods`.
 
-## Produced Output Files
+## Key Config Sections
 
-For one simulation run, outputs are written to `global.output_dir`.
+- `mp_forward`: `aspect_ratio`, grid bounds, `eta`, `tol`, `max_iter`, `damping`
+- `mp_inverse`: method choice, support grid settings, regularization, tolerances
+- `mp_inverse.fixed_point|optimization|stieltjes_based|moment_based`: method-specific options
+- `analysis.population_spectrum`: optional direct spectral-law input for MP experiments
 
-Arrays:
+If `analysis.population_spectrum` is omitted, runners derive a reference population law from covariance-model configs.
 
-- `times.npy`
-- `paths.npy`
-- `increments.npy`
-- `segment_indices.npy`
-- `realized_covariance.npy`
-- `realized_eigenvalues.npy`
-- `target_integrated_covariance.npy`
-- `target_population_eigenvalues.npy`
-- `realized_density.npz`
-- `target_density.npz`
+## Example Spectral Configs
 
-Metadata:
+- `configs/spectral_examples/01_dirac_forward_inverse.yaml`
+- `configs/spectral_examples/02_atomic_mixture_compare_methods.yaml`
+- `configs/spectral_examples/03_gamma_population.yaml`
+- `configs/spectral_examples/04_rescaled_beta_population.yaml`
+- `configs/spectral_examples/05_empirical_discrete_inline.yaml`
+- `configs/spectral_examples/06_grid_density_input.yaml`
 
-- `metadata.json` (config path, timers, drift info, key summary statistics)
+Each YAML file includes inline comments.
 
-Figures (if enabled):
+## Spectral Notebooks
 
-- `paths_sample.png`
-- `eigen_histogram.png`
-- `eigen_density_comparison.png`
+- `notebooks/01_mp_forward_inverse_demo.ipynb`
+- `notebooks/spectral_examples/*.ipynb` (one notebook per spectral example config)
 
-## Notebooks
+## Outputs
 
-One notebook per simulation example is provided under `notebooks/simulation_examples/`:
+Runners save arrays, plots, and metadata JSON under `global.output_dir`, including:
 
-- `01_constant_isotropic.ipynb`
-- `02_constant_diag_gamma.ipynb`
-- `03_constant_rotated_haar.ipynb`
-- `04_low_rank_plus_diag.ipynb`
-- `05_piecewise_two_segments.ipynb`
-- `06_piecewise_scaled_base.ipynb`
+- population/observed/reconstructed densities,
+- estimated population atoms/weights (per inverse method),
+- diagnostics and discrepancy metrics (L1/L2/Wasserstein/support/moments),
+- comparison plots and optional convergence plots.
 
-Each notebook:
+## Docs
 
-- runs the corresponding config,
-- plots sample coordinates,
-- compares realized and target population eigenvalue histograms.
-
-## Additional Docs
-
-- `docs/simulation_config_guide.md`
 - `docs/architecture.md`
+- `docs/simulation_config_guide.md`
+- `docs/spectral_config_guide.md`
 - `docs/numerics.md`
 
 ## Tests

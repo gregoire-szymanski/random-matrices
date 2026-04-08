@@ -1,0 +1,68 @@
+# Example 4: rescaled-beta population law H = shift + scale * Beta(alpha, beta).
+global:
+  seed: 99
+  output_dir: outputs/spectral_examples/04_rescaled_beta
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 90
+  T: 1.0
+  n_steps: 360
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    scalar: 1.0
+
+mp_forward:
+  aspect_ratio: 0.25
+  grid_min: 0.0
+  grid_max: 5.0
+  num_points: 550
+  eta: 0.0035
+  tol: 1.0e-9
+  max_iter: 550
+  damping: 0.7
+
+mp_inverse:
+  method: stieltjes_based
+  compare_methods: [stieltjes_based, optimization, fixed_point]
+  n_support: 55
+  support_min: 0.1
+  support_max: 3.5
+  eta: 0.0035
+  tol: 1.0e-6
+  max_iter: 320
+  regularization: 8.0e-4
+  optimizer_max_iter: 110
+  forward_max_iter: 240
+  forward_tol: 1.0e-7
+  stieltjes_based:
+    quantile_min: 0.02
+    quantile_max: 0.98
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  population_spectrum:
+    source: parametric
+    kind: rescaled_beta
+    params:
+      alpha: 2.0
+      beta: 6.0
+      scale: 2.2
+      shift: 0.3
+    n_atoms: 450

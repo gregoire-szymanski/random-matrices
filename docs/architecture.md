@@ -28,6 +28,7 @@ Typical full-pipeline flow:
 - Add new covariance models by extending `build_covariance_matrix`.
 - Add inverse algorithms under `spectral/inversion_methods/` and register in `spectral/inverse.py`.
 - Add new experiment templates in `experiments/` and wire into CLI.
+- Add direct population spectral inputs through `analysis.population_spectrum` in config.
 
 ## Simulation-Centric References
 
@@ -37,3 +38,11 @@ Typical full-pipeline flow:
 - Piecewise schedule policies: `src/mpdiff/simulation/volatility_segments.py`
 - Euler simulation core: `src/mpdiff/simulation/diffusion.py`
 - Example-driven config guide: `docs/simulation_config_guide.md`
+
+## Spectral-Centric References
+
+- Spectral law objects and conversions: `src/mpdiff/spectral/densities.py`
+- MP forward transform solver: `src/mpdiff/spectral/transforms.py`
+- MP inverse dispatch: `src/mpdiff/spectral/inverse.py`
+- Inverse method implementations: `src/mpdiff/spectral/inversion_methods/`
+- Spectral discrepancy metrics: `src/mpdiff/spectral/metrics.py`

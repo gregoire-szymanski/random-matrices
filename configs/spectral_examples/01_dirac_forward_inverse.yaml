@@ -1,0 +1,74 @@
+# Example 1: Dirac population law H = delta_{1.5}
+# This is the cleanest sanity check for MP forward and inverse methods.
+global:
+  seed: 123
+  output_dir: outputs/spectral_examples/01_dirac
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  # Simulation fields are required by the shared project schema,
+  # but mp-forward/mp-inverse runners use analysis.population_spectrum.
+  d: 80
+  T: 1.0
+  n_steps: 320
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    scalar: 1.0
+
+mp_forward:
+  # Notation: c = d / n (aspect ratio)
+  aspect_ratio: 0.25
+  grid_min: 0.0
+  grid_max: 5.0
+  num_points: 500
+  eta: 0.003
+  tol: 1.0e-9
+  max_iter: 500
+  damping: 0.72
+
+mp_inverse:
+  method: optimization
+  # compare_methods runs multiple methods on the same observed density.
+  compare_methods: [optimization, fixed_point, moment_based]
+  n_support: 40
+  support_min: 0.2
+  support_max: 3.0
+  eta: 0.003
+  tol: 1.0e-6
+  max_iter: 300
+  regularization: 1.0e-3
+  optimizer_max_iter: 80
+  forward_max_iter: 220
+  forward_tol: 1.0e-7
+  optimization:
+    optimizer: L-BFGS-B
+    max_iter: 80
+  fixed_point:
+    smoothing_strength: 0.06
+    min_kernel_density: 1.0e-16
+
+plotting:
+  style: default
+  figsize: [9, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  population_spectrum:
+    # Use a direct spectral-law input instead of building one from covariance model.
+    source: parametric
+    kind: dirac
+    params:
+      value: 1.5
+    n_atoms: 1

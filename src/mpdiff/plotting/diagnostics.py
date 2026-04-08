@@ -36,3 +36,21 @@ def plot_inverse_diagnostics(
 
     fig.tight_layout()
     return fig, (axes[0], axes[1])
+
+
+def plot_convergence_curve(
+    values: list[float],
+    ylabel: str = "residual",
+    title: str = "Inverse Convergence",
+    ax: plt.Axes | None = None,
+) -> plt.Axes:
+    """Plot scalar convergence values across iterations."""
+    if ax is None:
+        _, ax = plt.subplots()
+    if values:
+        ax.plot(range(1, len(values) + 1), values, linewidth=1.8)
+    ax.set_xlabel("iteration")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(alpha=0.2)
+    return ax

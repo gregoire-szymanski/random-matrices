@@ -1,4 +1,4 @@
-"""MP inverse dispatch and result container."""
+"""MP inverse dispatch, comparison helpers, and result containers."""
 
 from __future__ import annotations
 
@@ -7,12 +7,8 @@ from typing import Any
 
 from mpdiff.config.schemas import MPForwardConfig, MPInverseConfig
 from mpdiff.spectral.densities import DiscreteSpectrum, GridDensity
-from mpdiff.spectral.inversion_methods import (
-    invert_fixed_point,
-    invert_moment_based,
-    invert_optimization,
-    invert_stieltjes_based,
-)
+from mpdiff.spectral.inversion_methods import build_method_registry
+from mpdiff.spectral.inversion_methods.base import MethodResult
 
 
 @dataclass(slots=True)
@@ -25,6 +21,23 @@ class InversionResult:
     diagnostics: dict[str, Any]
 
 
+def _resolve_method(method_name: str):
+    registry = build_method_registry()
+    if method_name not in registry:
+        supported = ", ".join(sorted(registry.keys()))
+        raise ValueError(f"Unsupported MP inverse method: {method_name}. Supported: {supported}")
+    return registry[method_name]
+
+
+def _to_inversion_result(method_name: str, method_result: MethodResult) -> InversionResult:
+    return InversionResult(
+        method=method_name,
+        estimated_population=method_result.estimated_population,
+        reconstructed_observed=method_result.reconstructed_observed,
+        diagnostics=method_result.diagnostics,
+    )
+
+
 def invert_mp_density(
     observed: GridDensity,
     aspect_ratio: float,
@@ -32,21 +45,45 @@ def invert_mp_density(
     forward_settings: MPForwardConfig,
 ) -> InversionResult:
     """Dispatch MP inverse estimation according to configured method."""
-    method = inverse_settings.method
-    if method == "fixed_point":
-        population, reconstructed, diagnostics = invert_fixed_point(observed, aspect_ratio, inverse_settings, forward_settings)
-    elif method == "optimization":
-        population, reconstructed, diagnostics = invert_optimization(observed, aspect_ratio, inverse_settings, forward_settings)
-    elif method == "stieltjes_based":
-        population, reconstructed, diagnostics = invert_stieltjes_based(observed, aspect_ratio, inverse_settings, forward_settings)
-    elif method == "moment_based":
-        population, reconstructed, diagnostics = invert_moment_based(observed, aspect_ratio, inverse_settings, forward_settings)
-    else:
-        raise ValueError(f"Unsupported MP inverse method: {method}")
+    method_name = inverse_settings.method
+    method = _resolve_method(method_name)
+    method_result = method.invert(observed, aspect_ratio, inverse_settings, forward_settings)
+    return _to_inversion_result(method_name, method_result)
 
-    return InversionResult(
-        method=method,
-        estimated_population=population,
-        reconstructed_observed=reconstructed,
-        diagnostics=diagnostics,
-    )
+
+def compare_inverse_methods(
+    observed: GridDensity,
+    aspect_ratio: float,
+    inverse_settings: MPInverseConfig,
+    forward_settings: MPForwardConfig,
+    methods: list[str] | None = None,
+) -> dict[str, InversionResult]:
+    """Run several inverse methods on the same observed density."""
+    method_names = methods if methods is not None else inverse_settings.compare_methods
+    if not method_names:
+        method_names = [inverse_settings.method]
+
+    results: dict[str, InversionResult] = {}
+    for method_name in method_names:
+        local_settings = MPInverseConfig(
+            method=method_name,
+            compare_methods=list(inverse_settings.compare_methods),
+            n_support=inverse_settings.n_support,
+            support_min=inverse_settings.support_min,
+            support_max=inverse_settings.support_max,
+            eta=inverse_settings.eta,
+            tol=inverse_settings.tol,
+            max_iter=inverse_settings.max_iter,
+            regularization=inverse_settings.regularization,
+            optimizer_max_iter=inverse_settings.optimizer_max_iter,
+            forward_max_iter=inverse_settings.forward_max_iter,
+            forward_tol=inverse_settings.forward_tol,
+            fixed_point=inverse_settings.fixed_point,
+            optimization=inverse_settings.optimization,
+            stieltjes_based=inverse_settings.stieltjes_based,
+            moment_based=inverse_settings.moment_based,
+        )
+        result = invert_mp_density(observed, aspect_ratio, local_settings, forward_settings)
+        results[method_name] = result
+
+    return results

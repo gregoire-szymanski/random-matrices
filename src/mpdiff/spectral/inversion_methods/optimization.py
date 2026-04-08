@@ -9,6 +9,8 @@ from mpdiff.config.schemas import MPForwardConfig, MPInverseConfig
 from mpdiff.spectral.densities import DiscreteSpectrum, GridDensity
 from mpdiff.spectral.transforms import mp_forward_transform
 
+from .base import MethodResult
+
 
 def _support_range(observed: GridDensity, aspect_ratio: float, settings: MPInverseConfig) -> tuple[float, float]:
     sqrt_c = np.sqrt(aspect_ratio)
@@ -28,61 +30,91 @@ def _softmax(logits: np.ndarray) -> np.ndarray:
     return exp / np.sum(exp)
 
 
-def invert_optimization(
-    observed: GridDensity,
-    aspect_ratio: float,
-    inverse_settings: MPInverseConfig,
-    forward_settings: MPForwardConfig,
-) -> tuple[DiscreteSpectrum, GridDensity, dict[str, float | int | bool | str]]:
-    """Estimate population law by minimizing forward mismatch."""
-    support_min, support_max = _support_range(observed, aspect_ratio, inverse_settings)
-    support = np.linspace(support_min, support_max, inverse_settings.n_support)
+class OptimizationInverseMethod:
+    """Inverse method fitting weights by minimizing forward mismatch."""
 
-    obs_pdf = observed.density
+    name = "optimization"
 
-    def objective(logits: np.ndarray) -> float:
-        weights = _softmax(logits)
-        candidate = DiscreteSpectrum(atoms=support, weights=weights)
-        predicted = mp_forward_transform(
-            population=candidate,
+    def invert(
+        self,
+        observed: GridDensity,
+        aspect_ratio: float,
+        inverse_settings: MPInverseConfig,
+        forward_settings: MPForwardConfig,
+    ) -> MethodResult:
+        support_min, support_max = _support_range(observed, aspect_ratio, inverse_settings)
+        support = np.linspace(support_min, support_max, inverse_settings.n_support)
+
+        obs_pdf = observed.density
+        objective_history: list[float] = []
+
+        def objective(logits: np.ndarray) -> float:
+            weights = _softmax(logits)
+            candidate = DiscreteSpectrum(atoms=support, weights=weights)
+            predicted = mp_forward_transform(
+                population=candidate,
+                aspect_ratio=aspect_ratio,
+                grid=observed.grid,
+                eta=inverse_settings.eta,
+                tol=inverse_settings.forward_tol,
+                max_iter=inverse_settings.forward_max_iter,
+                damping=forward_settings.damping,
+                use_newton_fallback=True,
+            )
+            misfit = float(np.mean((predicted.density - obs_pdf) ** 2))
+
+            if inverse_settings.regularization > 0:
+                smooth_penalty = float(np.mean(np.diff(weights, n=2) ** 2))
+                misfit += inverse_settings.regularization * smooth_penalty
+            return misfit
+
+        def callback(xk: np.ndarray) -> None:
+            objective_history.append(float(objective(xk)))
+
+        x0 = np.zeros(inverse_settings.n_support)
+        result = minimize(
+            objective,
+            x0,
+            method=inverse_settings.optimization.optimizer,
+            callback=callback,
+            options={
+                "maxiter": int(max(inverse_settings.optimization.max_iter, inverse_settings.optimizer_max_iter)),
+            },
+        )
+
+        weights = _softmax(result.x)
+        population = DiscreteSpectrum(atoms=support, weights=weights, name="inverse_optimization")
+        reconstructed = mp_forward_transform(
+            population=population,
             aspect_ratio=aspect_ratio,
             grid=observed.grid,
             eta=inverse_settings.eta,
             tol=inverse_settings.forward_tol,
             max_iter=inverse_settings.forward_max_iter,
             damping=forward_settings.damping,
+            use_newton_fallback=True,
         )
-        misfit = float(np.mean((predicted.density - obs_pdf) ** 2))
 
-        if inverse_settings.regularization > 0:
-            smooth_penalty = float(np.mean(np.diff(weights, n=2) ** 2))
-            misfit += inverse_settings.regularization * smooth_penalty
-        return misfit
+        diagnostics = {
+            "iterations": int(result.nit),
+            "converged": bool(result.success),
+            "objective": float(result.fun),
+            "status": str(result.message),
+            "objective_history": objective_history,
+        }
+        return MethodResult(
+            estimated_population=population,
+            reconstructed_observed=reconstructed,
+            diagnostics=diagnostics,
+        )
 
-    x0 = np.zeros(inverse_settings.n_support)
-    result = minimize(
-        objective,
-        x0,
-        method="L-BFGS-B",
-        options={"maxiter": inverse_settings.optimizer_max_iter},
-    )
 
-    weights = _softmax(result.x)
-    population = DiscreteSpectrum(atoms=support, weights=weights, name="inverse_optimization")
-    reconstructed = mp_forward_transform(
-        population=population,
-        aspect_ratio=aspect_ratio,
-        grid=observed.grid,
-        eta=inverse_settings.eta,
-        tol=inverse_settings.forward_tol,
-        max_iter=inverse_settings.forward_max_iter,
-        damping=forward_settings.damping,
-    )
-
-    diagnostics = {
-        "iterations": int(result.nit),
-        "converged": bool(result.success),
-        "objective": float(result.fun),
-        "status": str(result.message),
-    }
-    return population, reconstructed, diagnostics
+def invert_optimization(
+    observed: GridDensity,
+    aspect_ratio: float,
+    inverse_settings: MPInverseConfig,
+    forward_settings: MPForwardConfig,
+) -> tuple[DiscreteSpectrum, GridDensity, dict[str, float | int | bool | str | list[float]]]:
+    """Backward-compatible functional wrapper for optimization inverse."""
+    result = OptimizationInverseMethod().invert(observed, aspect_ratio, inverse_settings, forward_settings)
+    return result.estimated_population, result.reconstructed_observed, result.diagnostics
