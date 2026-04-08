@@ -1,0 +1,55 @@
+global:
+  seed: 1234
+  output_dir: outputs/constant_diag_dirac
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+
+simulation:
+  d: 80
+  T: 1.0
+  n_steps: 320
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    scalar: 1.0
+    jitter: 1.0e-10
+
+mp_forward:
+  aspect_ratio: 0.25
+  grid_min: 0.0
+  grid_max: 3.5
+  num_points: 450
+  eta: 0.003
+  tol: 1.0e-9
+  max_iter: 400
+  damping: 0.7
+
+mp_inverse:
+  method: optimization
+  n_support: 35
+  support_min: 0.05
+  support_max: 2.5
+  eta: 0.003
+  tol: 1.0e-6
+  max_iter: 250
+  regularization: 1.0e-3
+  optimizer_max_iter: 120
+  forward_max_iter: 220
+  forward_tol: 1.0e-7
+
+plotting:
+  style: default
+  figsize: [9, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  reference_segment_index: 0

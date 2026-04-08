@@ -1,0 +1,89 @@
+global:
+  seed: 31415
+  output_dir: outputs/piecewise_models
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+
+simulation:
+  d: 90
+  T: 1.0
+  n_steps: 360
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: piecewise
+  segments:
+    - start: 0.0
+      end: 0.3
+      scalar: 1.0
+      model:
+        kind: diag_distribution
+        eigen_distribution:
+          kind: uniform
+          low: 0.4
+          high: 1.2
+    - start: 0.3
+      end: 0.7
+      scalar: 1.0
+      model:
+        kind: low_rank_plus_diag
+        low_rank:
+          rank: 8
+          factor_scale: 1.1
+          latent_eigen_distribution:
+            kind: gamma
+            shape: 2.0
+            scale: 0.7
+          diag_eigen_distribution:
+            kind: dirac
+            value: 0.15
+    - start: 0.7
+      end: 1.0
+      scalar: 0.9
+      model:
+        kind: orthogonal_diag
+        orthogonal:
+          method: haar
+        eigen_distribution:
+          kind: rescaled_beta
+          alpha: 2.0
+          beta: 6.0
+          a: 2.0
+          b: 0.2
+
+mp_forward:
+  aspect_ratio: 0.25
+  grid_min: 0.0
+  grid_max: 5.0
+  num_points: 520
+  eta: 0.004
+  tol: 1.0e-9
+  max_iter: 500
+  damping: 0.7
+
+mp_inverse:
+  method: fixed_point
+  n_support: 60
+  support_min: 0.02
+  support_max: 4.0
+  eta: 0.004
+  tol: 2.0e-6
+  max_iter: 320
+  regularization: 0.08
+  optimizer_max_iter: 80
+  forward_max_iter: 200
+  forward_tol: 1.0e-7
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  reference_segment_index: 1

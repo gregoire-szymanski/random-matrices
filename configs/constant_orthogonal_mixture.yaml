@@ -1,0 +1,60 @@
+global:
+  seed: 2026
+  output_dir: outputs/constant_orthogonal_mixture
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+
+simulation:
+  d: 120
+  T: 1.0
+  n_steps: 400
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: orthogonal_diag
+    orthogonal:
+      method: haar
+    eigen_distribution:
+      kind: dirac_mixture
+      values: [0.3, 0.8, 1.4, 2.2]
+      weights: [0.2, 0.3, 0.35, 0.15]
+    jitter: 1.0e-10
+
+mp_forward:
+  aspect_ratio: 0.3
+  grid_min: 0.0
+  grid_max: 4.5
+  num_points: 500
+  eta: 0.003
+  tol: 1.0e-9
+  max_iter: 450
+  damping: 0.72
+
+mp_inverse:
+  method: stieltjes_based
+  n_support: 50
+  support_min: 0.05
+  support_max: 3.5
+  eta: 0.004
+  tol: 1.0e-6
+  max_iter: 280
+  regularization: 5.0e-4
+  optimizer_max_iter: 100
+  forward_max_iter: 220
+  forward_tol: 1.0e-7
+
+plotting:
+  style: default
+  figsize: [9, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  reference_segment_index: 0

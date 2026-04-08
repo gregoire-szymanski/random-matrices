@@ -1,0 +1,79 @@
+global:
+  seed: 777
+  output_dir: outputs/piecewise_scaled_base
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+
+simulation:
+  d: 100
+  T: 1.0
+  n_steps: 420
+  drift: 0.0
+  initial_state: 0.0
+
+volatility:
+  mode: piecewise_scaled_base
+  scaled_base:
+    base_matrix_policy: fixed_once
+    share_matrix_law_across_segments: true
+    base_model:
+      kind: low_rank_plus_diag
+      low_rank:
+        rank: 10
+        factor_scale: 1.0
+        latent_eigen_distribution:
+          kind: gamma
+          shape: 2.5
+          scale: 0.45
+        diag_eigen_distribution:
+          kind: dirac
+          value: 0.12
+  segments:
+    - start: 0.0
+      end: 0.25
+      scalar: 0.7
+    - start: 0.25
+      end: 0.55
+      scalar: 1.4
+    - start: 0.55
+      end: 0.8
+      scalar: 0.9
+    - start: 0.8
+      end: 1.0
+      scalar: 1.8
+
+mp_forward:
+  aspect_ratio: 0.24
+  grid_min: 0.0
+  grid_max: 6.0
+  num_points: 520
+  eta: 0.004
+  tol: 1.0e-9
+  max_iter: 500
+  damping: 0.7
+
+mp_inverse:
+  method: moment_based
+  n_support: 45
+  support_min: 0.02
+  support_max: 5.0
+  eta: 0.004
+  tol: 1.0e-6
+  max_iter: 220
+  regularization: 1.0e-3
+  optimizer_max_iter: 60
+  forward_max_iter: 180
+  forward_tol: 1.0e-7
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+
+benchmark:
+  enabled: true
+
+analysis:
+  reference_segment_index: 0
