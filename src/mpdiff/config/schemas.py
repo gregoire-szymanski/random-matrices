@@ -1,4 +1,4 @@
-"""Dataclass-based configuration schemas for mpdiff."""
+"""Dataclass-based configuration schemas and parsers for mpdiff."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 @dataclass(slots=True)
 class EigenDistributionConfig:
-    """Eigenvalue distribution settings for diagonal covariance models."""
+    """Distribution parameters for eigenvalue/diagonal sampling."""
 
     kind: str = "dirac"
     value: float = 1.0
@@ -20,65 +20,110 @@ class EigenDistributionConfig:
     scale: float = 1.0
     alpha: float = 2.0
     beta: float = 5.0
-    a: float = 1.0
-    b: float = 0.0
+    beta_scale: float = 1.0
+    beta_shift: float = 0.0
+
+
+@dataclass(slots=True)
+class DriftConfig:
+    """Configurable drift models used in Euler diffusion simulation.
+
+    Supported ``kind`` values:
+    - ``zero``: no drift.
+    - ``constant``: constant vector drift from ``vector``.
+    - ``linear_mean_reversion``: ``b(t, x) = -theta * (x - target)``.
+    - ``time_sine``: ``b(t, x) = amplitude * sin(2π frequency t + phase) * direction``.
+    - ``callable``: import callable from ``callable_path`` as ``module:function``.
+    """
+
+    kind: str = "zero"
+    vector: list[float] = field(default_factory=list)
+    theta: float = 0.0
+    target: float | list[float] = 0.0
+    amplitude: float = 0.0
+    frequency: float = 1.0
+    phase: float = 0.0
+    direction: list[float] = field(default_factory=list)
+    callable_path: str | None = None
+    callable_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
 class OrthogonalConfig:
     """Configuration for orthogonal matrix generation."""
 
-    method: str = "haar"
+    method: str = "haar"  # haar | identity
 
 
 @dataclass(slots=True)
-class LowRankConfig:
-    """Parameters for ``B Σ B^T + D`` low-rank covariance models."""
+class LowRankFactorConfig:
+    """Configuration for generating low-rank factor matrix ``B``."""
 
-    rank: int = 5
-    factor_scale: float = 1.0
-    latent_eigen_distribution: EigenDistributionConfig = field(
-        default_factory=lambda: EigenDistributionConfig(kind="dirac", value=1.0)
-    )
-    diag_eigen_distribution: EigenDistributionConfig = field(
+    method: str = "gaussian"  # gaussian | identity_block | from_file
+    scale: float = 1.0
+    normalize_columns: bool = True
+    matrix_path: str | None = None
+
+
+@dataclass(slots=True)
+class DiagonalNoiseConfig:
+    """Configuration for diagonal matrix ``D`` in ``B Σ B^T + D``."""
+
+    kind: str = "scalar_identity"  # scalar_identity | distribution
+    scalar: float = 0.1
+    distribution: EigenDistributionConfig = field(
         default_factory=lambda: EigenDistributionConfig(kind="dirac", value=0.1)
     )
 
 
 @dataclass(slots=True)
-class CovarianceModelConfig:
-    """Covariance model definition for each volatility segment."""
+class LowRankConfig:
+    """Parameters for ``B Σ B^T + D`` covariance model."""
 
-    kind: str = "diag_scalar"
+    rank: int = 5
+    latent_eigen_distribution: EigenDistributionConfig = field(
+        default_factory=lambda: EigenDistributionConfig(kind="dirac", value=1.0)
+    )
+    factor: LowRankFactorConfig = field(default_factory=LowRankFactorConfig)
+    diagonal_noise: DiagonalNoiseConfig = field(default_factory=DiagonalNoiseConfig)
+
+
+@dataclass(slots=True)
+class CovarianceModelConfig:
+    """Covariance model definition for volatility segments."""
+
+    kind: str = "diag_scalar"  # diag_scalar | diag_distribution | orthogonal_diag | low_rank_plus_diag
     scalar: float = 1.0
     eigen_distribution: EigenDistributionConfig = field(default_factory=EigenDistributionConfig)
     orthogonal: OrthogonalConfig = field(default_factory=OrthogonalConfig)
     low_rank: LowRankConfig = field(default_factory=LowRankConfig)
+    sampling_policy: str = "draw_once"  # draw_once | redraw_per_segment
     jitter: float = 1e-10
 
 
 @dataclass(slots=True)
 class PiecewiseSegmentConfig:
-    """Piecewise interval model and optional scalar multiplier."""
+    """Single segment in a piecewise-constant volatility schedule."""
 
     start: float = 0.0
     end: float = 1.0
     scalar: float = 1.0
     model: CovarianceModelConfig | None = None
+    name: str = ""
 
 
 @dataclass(slots=True)
 class ScaledBaseVolatilityConfig:
-    """Settings for piecewise scalar-times-base covariance structure."""
+    """Settings for segment model ``Cov_j = c_j * M_j``."""
 
     base_model: CovarianceModelConfig = field(default_factory=CovarianceModelConfig)
-    base_matrix_policy: str = "fixed_once"  # fixed_once | redraw_per_segment
+    base_matrix_policy: str = "common_fixed"  # common_fixed | redraw_per_segment
     share_matrix_law_across_segments: bool = True
 
 
 @dataclass(slots=True)
 class VolatilityConfig:
-    """Volatility specification across time."""
+    """Volatility specification over time."""
 
     mode: str = "constant"  # constant | piecewise | piecewise_scaled_base
     constant_model: CovarianceModelConfig = field(default_factory=CovarianceModelConfig)
@@ -93,7 +138,8 @@ class SimulationConfig:
     d: int = 100
     T: float = 1.0
     n_steps: int = 1000
-    drift: float | list[float] = 0.0
+    drift: float | list[float] | None = 0.0  # legacy compatibility field
+    drift_model: DriftConfig = field(default_factory=DriftConfig)
     initial_state: float | list[float] = 0.0
     time_grid: list[float] | None = None
 
@@ -131,12 +177,18 @@ class MPInverseConfig:
 
 @dataclass(slots=True)
 class PlottingConfig:
-    """Plotting options for experiment scripts."""
+    """Plotting options for simulation and spectral scripts."""
 
     style: str = "default"
     figsize: tuple[float, float] = (8.0, 5.0)
     dpi: int = 120
     show: bool = True
+    plot_paths: bool = True
+    max_path_dims: int = 5
+    plot_eigen_hist: bool = True
+    eigen_hist_bins: int = 45
+    plot_eigen_density: bool = True
+    density_bandwidth: float | None = None
 
 
 @dataclass(slots=True)
@@ -163,6 +215,7 @@ class GlobalConfig:
     log_level: str = "INFO"
     save_figures: bool = True
     save_arrays: bool = True
+    save_metadata: bool = True
 
 
 @dataclass(slots=True)
@@ -185,10 +238,24 @@ def _float_list(value: Any) -> list[float]:
     return [float(v) for v in value]
 
 
+def _mapping(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    return {}
+
+
 def _parse_eigen_distribution(data: Mapping[str, Any] | None) -> EigenDistributionConfig:
-    data = {} if data is None else dict(data)
+    data = dict(_mapping(data))
+    kind = str(data.get("kind", "dirac"))
+
+    # Backward compatibility for rescaled beta parameter names.
+    beta_scale = float(data.get("beta_scale", data.get("a", data.get("rescale", 1.0))))
+    if kind == "rescaled_beta" and "scale" in data and "beta_scale" not in data and "a" not in data:
+        beta_scale = float(data["scale"])
+    beta_shift = float(data.get("beta_shift", data.get("b", data.get("shift", 0.0))))
+
     return EigenDistributionConfig(
-        kind=str(data.get("kind", "dirac")),
+        kind=kind,
         value=float(data.get("value", 1.0)),
         values=_float_list(data.get("values")),
         weights=_float_list(data.get("weights")),
@@ -198,72 +265,183 @@ def _parse_eigen_distribution(data: Mapping[str, Any] | None) -> EigenDistributi
         scale=float(data.get("scale", 1.0)),
         alpha=float(data.get("alpha", 2.0)),
         beta=float(data.get("beta", 5.0)),
-        a=float(data.get("a", 1.0)),
-        b=float(data.get("b", 0.0)),
+        beta_scale=beta_scale,
+        beta_shift=beta_shift,
     )
+
+
+def _parse_drift_model(data: Mapping[str, Any] | None, legacy_drift: Any) -> DriftConfig:
+    drift_data = dict(_mapping(data))
+    if drift_data:
+        return DriftConfig(
+            kind=str(drift_data.get("kind", "zero")),
+            vector=_float_list(drift_data.get("vector")),
+            theta=float(drift_data.get("theta", 0.0)),
+            target=(
+                float(drift_data.get("target", 0.0))
+                if isinstance(drift_data.get("target", 0.0), (int, float))
+                else _float_list(drift_data.get("target"))
+            ),
+            amplitude=float(drift_data.get("amplitude", 0.0)),
+            frequency=float(drift_data.get("frequency", 1.0)),
+            phase=float(drift_data.get("phase", 0.0)),
+            direction=_float_list(drift_data.get("direction")),
+            callable_path=str(drift_data["callable_path"]) if drift_data.get("callable_path") is not None else None,
+            callable_kwargs=dict(_mapping(drift_data.get("callable_kwargs"))),
+        )
+
+    # Legacy mode: infer from scalar/list-valued simulation.drift.
+    if legacy_drift is None:
+        return DriftConfig(kind="zero")
+    if isinstance(legacy_drift, (int, float)):
+        if abs(float(legacy_drift)) < 1e-15:
+            return DriftConfig(kind="zero")
+        return DriftConfig(kind="constant", vector=[float(legacy_drift)])
+    vector = _float_list(legacy_drift)
+    if all(abs(v) < 1e-15 for v in vector):
+        return DriftConfig(kind="zero")
+    return DriftConfig(kind="constant", vector=vector)
+
+
+def _parse_orthogonal(data: Mapping[str, Any] | None) -> OrthogonalConfig:
+    data = dict(_mapping(data))
+    return OrthogonalConfig(method=str(data.get("method", "haar")))
+
+
+def _parse_factor(data: Mapping[str, Any] | None, legacy_factor_scale: float = 1.0) -> LowRankFactorConfig:
+    data = dict(_mapping(data))
+    return LowRankFactorConfig(
+        method=str(data.get("method", data.get("kind", "gaussian"))),
+        scale=float(data.get("scale", data.get("factor_scale", legacy_factor_scale))),
+        normalize_columns=bool(data.get("normalize_columns", True)),
+        matrix_path=str(data["matrix_path"]) if data.get("matrix_path") is not None else None,
+    )
+
+
+def _parse_diagonal_noise(data: Mapping[str, Any] | None, legacy_diag: Mapping[str, Any] | None) -> DiagonalNoiseConfig:
+    data_dict = dict(_mapping(data))
+    if data_dict:
+        kind = str(data_dict.get("kind", "scalar_identity"))
+        return DiagonalNoiseConfig(
+            kind=kind,
+            scalar=float(data_dict.get("scalar", 0.1)),
+            distribution=_parse_eigen_distribution(data_dict.get("distribution")),
+        )
+
+    legacy_diag = dict(_mapping(legacy_diag))
+    if legacy_diag:
+        return DiagonalNoiseConfig(
+            kind="distribution",
+            distribution=_parse_eigen_distribution(legacy_diag),
+        )
+
+    return DiagonalNoiseConfig()
 
 
 def _parse_low_rank(data: Mapping[str, Any] | None) -> LowRankConfig:
-    data = {} if data is None else dict(data)
+    data = dict(_mapping(data))
+    factor_scale_legacy = float(data.get("factor_scale", 1.0))
+
     return LowRankConfig(
         rank=int(data.get("rank", 5)),
-        factor_scale=float(data.get("factor_scale", 1.0)),
-        latent_eigen_distribution=_parse_eigen_distribution(data.get("latent_eigen_distribution")),
-        diag_eigen_distribution=_parse_eigen_distribution(data.get("diag_eigen_distribution")),
+        latent_eigen_distribution=_parse_eigen_distribution(
+            data.get("latent_eigen_distribution", data.get("sigma_distribution"))
+        ),
+        factor=_parse_factor(data.get("factor"), legacy_factor_scale=factor_scale_legacy),
+        diagonal_noise=_parse_diagonal_noise(
+            data.get("diagonal_noise"),
+            data.get("diag_eigen_distribution"),
+        ),
     )
 
 
+def _normalize_covariance_kind(kind: str) -> str:
+    aliases = {
+        "diagonal_isotropic": "diag_scalar",
+        "isotropic_diag": "diag_scalar",
+        "rotated_diag": "orthogonal_diag",
+    }
+    return aliases.get(kind, kind)
+
+
 def _parse_covariance_model(data: Mapping[str, Any] | None) -> CovarianceModelConfig:
-    data = {} if data is None else dict(data)
-    orth = data.get("orthogonal", {})
+    data = dict(_mapping(data))
+    kind = _normalize_covariance_kind(str(data.get("kind", "diag_scalar")))
     return CovarianceModelConfig(
-        kind=str(data.get("kind", "diag_scalar")),
+        kind=kind,
         scalar=float(data.get("scalar", 1.0)),
         eigen_distribution=_parse_eigen_distribution(data.get("eigen_distribution")),
-        orthogonal=OrthogonalConfig(method=str(orth.get("method", "haar"))),
+        orthogonal=_parse_orthogonal(data.get("orthogonal")),
         low_rank=_parse_low_rank(data.get("low_rank")),
+        sampling_policy=str(data.get("sampling_policy", data.get("draw_mode", "draw_once"))),
         jitter=float(data.get("jitter", 1e-10)),
     )
 
 
-def _parse_segment(data: Mapping[str, Any]) -> PiecewiseSegmentConfig:
+def _parse_segment(data: Mapping[str, Any], default_name: str) -> PiecewiseSegmentConfig:
+    data = dict(_mapping(data))
     return PiecewiseSegmentConfig(
         start=float(data["start"]),
         end=float(data["end"]),
         scalar=float(data.get("scalar", 1.0)),
         model=_parse_covariance_model(data.get("model")) if data.get("model") is not None else None,
+        name=str(data.get("name", default_name)),
+    )
+
+
+def _parse_scaled_base(data: Mapping[str, Any] | None) -> ScaledBaseVolatilityConfig:
+    data = dict(_mapping(data))
+    base_matrix_policy = str(data.get("base_matrix_policy", "common_fixed"))
+    if base_matrix_policy == "fixed_once":
+        base_matrix_policy = "common_fixed"
+    return ScaledBaseVolatilityConfig(
+        base_model=_parse_covariance_model(data.get("base_model")),
+        base_matrix_policy=base_matrix_policy,
+        share_matrix_law_across_segments=bool(data.get("share_matrix_law_across_segments", True)),
     )
 
 
 def _parse_volatility(data: Mapping[str, Any]) -> VolatilityConfig:
+    data = dict(_mapping(data))
     mode = str(data.get("mode", "constant"))
-    scaled_base_data = dict(data.get("scaled_base", {}))
-    scaled_base = ScaledBaseVolatilityConfig(
-        base_model=_parse_covariance_model(scaled_base_data.get("base_model")),
-        base_matrix_policy=str(scaled_base_data.get("base_matrix_policy", "fixed_once")),
-        share_matrix_law_across_segments=bool(scaled_base_data.get("share_matrix_law_across_segments", True)),
-    )
-    segments = [_parse_segment(seg) for seg in data.get("segments", [])]
+    if mode == "scaled_base":
+        mode = "piecewise_scaled_base"
+
+    segments = [
+        _parse_segment(segment_data, default_name=f"segment_{idx}")
+        for idx, segment_data in enumerate(data.get("segments", []))
+    ]
+
     return VolatilityConfig(
         mode=mode,
-        constant_model=_parse_covariance_model(data.get("constant_model")),
+        constant_model=_parse_covariance_model(data.get("constant_model", data.get("model"))),
         segments=segments,
-        scaled_base=scaled_base,
+        scaled_base=_parse_scaled_base(data.get("scaled_base")),
     )
 
 
 def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
     """Build :class:`ProjectConfig` from a dictionary representation."""
-    global_data = dict(data.get("global", {}))
-    sim_data = dict(data.get("simulation", {}))
-    vol_data = dict(data.get("volatility", {}))
-    fwd_data = dict(data.get("mp_forward", {}))
-    inv_data = dict(data.get("mp_inverse", {}))
-    plot_data = dict(data.get("plotting", {}))
-    bench_data = dict(data.get("benchmark", {}))
-    analysis_data = dict(data.get("analysis", {}))
+    global_data = dict(_mapping(data.get("global")))
+    sim_data = dict(_mapping(data.get("simulation")))
+    vol_data = dict(_mapping(data.get("volatility")))
+    fwd_data = dict(_mapping(data.get("mp_forward")))
+    inv_data = dict(_mapping(data.get("mp_inverse")))
+    plot_data = dict(_mapping(data.get("plotting")))
+    bench_data = dict(_mapping(data.get("benchmark")))
+    analysis_data = dict(_mapping(data.get("analysis")))
 
     plotting_size = plot_data.get("figsize", [8.0, 5.0])
+    legacy_drift = sim_data.get("drift", 0.0)
+    drift_model = _parse_drift_model(sim_data.get("drift_model"), legacy_drift=legacy_drift)
+
+    initial_state_raw = sim_data.get("initial_state", 0.0)
+    initial_state = (
+        float(initial_state_raw)
+        if isinstance(initial_state_raw, (int, float))
+        else _float_list(initial_state_raw)
+    )
+
     return ProjectConfig(
         global_settings=GlobalConfig(
             seed=global_data.get("seed", 1234),
@@ -271,15 +449,21 @@ def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
             log_level=str(global_data.get("log_level", "INFO")),
             save_figures=bool(global_data.get("save_figures", True)),
             save_arrays=bool(global_data.get("save_arrays", True)),
+            save_metadata=bool(global_data.get("save_metadata", True)),
         ),
         simulation=SimulationConfig(
             d=int(sim_data.get("d", 100)),
             T=float(sim_data.get("T", 1.0)),
             n_steps=int(sim_data.get("n_steps", 1000)),
-            drift=float(sim_data["drift"]) if isinstance(sim_data.get("drift", 0.0), (int, float)) else _float_list(sim_data.get("drift")),
-            initial_state=float(sim_data["initial_state"])
-            if isinstance(sim_data.get("initial_state", 0.0), (int, float))
-            else _float_list(sim_data.get("initial_state")),
+            drift=(
+                float(legacy_drift)
+                if isinstance(legacy_drift, (int, float))
+                else _float_list(legacy_drift)
+            )
+            if legacy_drift is not None
+            else None,
+            drift_model=drift_model,
+            initial_state=initial_state,
             time_grid=_float_list(sim_data.get("time_grid")) if sim_data.get("time_grid") is not None else None,
         ),
         volatility=_parse_volatility(vol_data),
@@ -311,6 +495,16 @@ def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
             figsize=(float(plotting_size[0]), float(plotting_size[1])),
             dpi=int(plot_data.get("dpi", 120)),
             show=bool(plot_data.get("show", True)),
+            plot_paths=bool(plot_data.get("plot_paths", True)),
+            max_path_dims=int(plot_data.get("max_path_dims", 5)),
+            plot_eigen_hist=bool(plot_data.get("plot_eigen_hist", True)),
+            eigen_hist_bins=int(plot_data.get("eigen_hist_bins", 45)),
+            plot_eigen_density=bool(plot_data.get("plot_eigen_density", True)),
+            density_bandwidth=(
+                float(plot_data["density_bandwidth"])
+                if plot_data.get("density_bandwidth") is not None
+                else None
+            ),
         ),
         benchmark=BenchmarkConfig(enabled=bool(bench_data.get("enabled", True))),
         analysis=AnalysisConfig(

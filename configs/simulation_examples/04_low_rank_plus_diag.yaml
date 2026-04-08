@@ -1,0 +1,75 @@
+# Example 04
+# Low-rank plus diagonal covariance:
+# Cov = B * Sigma * B^T + D
+# with rank K < d.
+
+global:
+  seed: 20260408
+  output_dir: outputs/sim_example_04_low_rank_plus_diag
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 140
+  T: 1.0
+  n_steps: 550
+  initial_state: 0.0
+
+  # Mean-reverting drift: b(t,x) = -theta * (x - target)
+  drift_model:
+    kind: linear_mean_reversion
+    theta: 0.2
+    target: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: low_rank_plus_diag
+
+    low_rank:
+      rank: 12
+
+      # Latent factor eigenvalues (Sigma diagonal)
+      latent_eigen_distribution:
+        kind: gamma
+        shape: 2.0
+        scale: 0.5
+
+      # B generation options:
+      # gaussian | identity_block | from_file
+      factor:
+        method: gaussian
+        scale: 1.0
+        normalize_columns: true
+        # matrix_path is only used if method = from_file
+        matrix_path: null
+
+      # D generation options:
+      # scalar_identity => D = scalar * I_d
+      # distribution   => D diagonal entries from configured distribution
+      diagonal_noise:
+        kind: distribution
+        distribution:
+          kind: uniform
+          low: 0.05
+          high: 0.20
+
+    sampling_policy: draw_once
+    jitter: 1.0e-10
+
+mp_forward:
+  grid_min: 0.0
+  grid_max: 5.5
+  num_points: 520
+
+plotting:
+  show: false
+  plot_paths: true
+  max_path_dims: 4
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

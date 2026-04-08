@@ -1,0 +1,53 @@
+# Example 02
+# Constant diagonal covariance with gamma-distributed diagonal entries.
+# The diagonal is sampled once and fixed for the whole trajectory by default.
+
+global:
+  seed: 20260408
+  output_dir: outputs/sim_example_02_diag_gamma
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 120
+  T: 1.0
+  n_steps: 500
+  initial_state: 0.0
+
+  # Constant drift vector: here all coordinates have drift 0.02.
+  drift_model:
+    kind: constant
+    vector: [0.02]
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_distribution
+
+    # Draw diagonal entries from Gamma(shape, scale).
+    eigen_distribution:
+      kind: gamma
+      shape: 2.5
+      scale: 0.35
+
+    # draw_once => one diagonal draw reused for this simulation schedule.
+    # switch to redraw_per_segment when used inside piecewise schedules.
+    sampling_policy: draw_once
+    jitter: 1.0e-10
+
+mp_forward:
+  grid_min: 0.0
+  grid_max: 5.0
+  num_points: 500
+
+plotting:
+  show: false
+  plot_paths: true
+  max_path_dims: 4
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

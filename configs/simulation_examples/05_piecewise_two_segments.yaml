@@ -1,0 +1,67 @@
+# Example 05
+# Piecewise-constant volatility with two segment types.
+# Segment 1: isotropic diagonal
+# Segment 2: rotated diagonal with Haar orthogonal matrix
+
+global:
+  seed: 20260408
+  output_dir: outputs/sim_example_05_piecewise_two_segments
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 90
+  T: 1.0
+  n_steps: 450
+  initial_state: 0.0
+  drift_model:
+    kind: zero
+
+volatility:
+  mode: piecewise
+  segments:
+    - name: early_isotropic
+      start: 0.0
+      end: 0.4
+      scalar: 1.0
+      model:
+        kind: diag_scalar
+        scalar: 0.8
+        sampling_policy: draw_once
+
+    - name: late_rotated
+      start: 0.4
+      end: 1.0
+      scalar: 1.2
+      model:
+        kind: orthogonal_diag
+        orthogonal:
+          method: haar
+        eigen_distribution:
+          kind: rescaled_beta
+          alpha: 2.0
+          beta: 5.0
+          beta_scale: 2.2
+          beta_shift: 0.1
+
+        # redraw_per_segment means if this model appears in multiple segments,
+        # it is re-sampled for each segment.
+        sampling_policy: redraw_per_segment
+        jitter: 1.0e-10
+
+mp_forward:
+  grid_min: 0.0
+  grid_max: 6.0
+  num_points: 540
+
+plotting:
+  show: false
+  plot_paths: true
+  max_path_dims: 5
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

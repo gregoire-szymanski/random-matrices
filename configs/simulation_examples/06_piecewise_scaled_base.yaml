@@ -1,0 +1,90 @@
+# Example 06
+# Piecewise scalar-times-random-base model:
+# Cov_j = c_j * M_j
+# where M_j is from a chosen covariance family.
+
+global:
+  seed: 20260408
+  output_dir: outputs/sim_example_06_piecewise_scaled_base
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 110
+  T: 1.0
+  n_steps: 500
+  initial_state: 0.0
+  drift_model:
+    kind: zero
+
+volatility:
+  mode: piecewise_scaled_base
+
+  scaled_base:
+    # Law for M_j (unless segment override is enabled)
+    base_model:
+      kind: low_rank_plus_diag
+      low_rank:
+        rank: 10
+        latent_eigen_distribution:
+          kind: gamma
+          shape: 2.2
+          scale: 0.45
+        factor:
+          method: gaussian
+          scale: 1.0
+          normalize_columns: true
+        diagonal_noise:
+          kind: scalar_identity
+          scalar: 0.12
+
+      sampling_policy: draw_once
+      jitter: 1.0e-10
+
+    # base_matrix_policy options:
+    # - common_fixed: one common matrix M reused for all segments
+    # - redraw_per_segment: independent M_j on each segment
+    base_matrix_policy: redraw_per_segment
+
+    # If true: all segments use base_model law.
+    # If false: segments can provide their own model law.
+    share_matrix_law_across_segments: true
+
+  segments:
+    - name: regime_1
+      start: 0.0
+      end: 0.25
+      scalar: 0.6
+
+    - name: regime_2
+      start: 0.25
+      end: 0.55
+      scalar: 1.4
+
+    - name: regime_3
+      start: 0.55
+      end: 0.80
+      scalar: 0.9
+
+    - name: regime_4
+      start: 0.80
+      end: 1.0
+      scalar: 1.8
+
+mp_forward:
+  grid_min: 0.0
+  grid_max: 6.5
+  num_points: 560
+
+plotting:
+  show: false
+  plot_paths: true
+  max_path_dims: 5
+  plot_eigen_hist: true
+  eigen_hist_bins: 55
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

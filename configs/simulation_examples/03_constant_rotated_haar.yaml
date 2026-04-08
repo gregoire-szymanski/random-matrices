@@ -1,0 +1,60 @@
+# Example 03
+# Rotated covariance: Cov = U * Sigma * U^T
+# Sigma is diagonal from a Dirac mixture; U is Haar-distributed orthogonal.
+
+global:
+  seed: 20260408
+  output_dir: outputs/sim_example_03_rotated_haar
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 100
+  T: 1.0
+  n_steps: 450
+  initial_state: 0.0
+
+  # Optional simple time-varying drift.
+  drift_model:
+    kind: time_sine
+    amplitude: 0.03
+    frequency: 1.0
+    phase: 0.0
+    direction: [1.0]
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: orthogonal_diag
+
+    # U generation method:
+    # - haar: random orthogonal from QR
+    # - identity: deterministic debugging option
+    orthogonal:
+      method: haar
+
+    eigen_distribution:
+      kind: dirac_mixture
+      values: [0.4, 1.0, 2.0]
+      weights: [0.3, 0.5, 0.2]
+
+    sampling_policy: draw_once
+    jitter: 1.0e-10
+
+mp_forward:
+  grid_min: 0.0
+  grid_max: 6.0
+  num_points: 520
+
+plotting:
+  show: false
+  plot_paths: true
+  max_path_dims: 5
+  plot_eigen_hist: true
+  eigen_hist_bins: 50
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

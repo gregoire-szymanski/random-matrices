@@ -28,3 +28,12 @@ Typical full-pipeline flow:
 - Add new covariance models by extending `build_covariance_matrix`.
 - Add inverse algorithms under `spectral/inversion_methods/` and register in `spectral/inverse.py`.
 - Add new experiment templates in `experiments/` and wire into CLI.
+
+## Simulation-Centric References
+
+- Config schema and parsing: `src/mpdiff/config/schemas.py`
+- Config validation: `src/mpdiff/config/validation.py`
+- Covariance and volatility builders: `src/mpdiff/simulation/covariance_builders.py`
+- Piecewise schedule policies: `src/mpdiff/simulation/volatility_segments.py`
+- Euler simulation core: `src/mpdiff/simulation/diffusion.py`
+- Example-driven config guide: `docs/simulation_config_guide.md`

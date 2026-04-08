@@ -57,3 +57,21 @@ def plot_discrete_spectrum(
     ax.set_xlabel("eigenvalue atom")
     ax.set_ylabel("weight")
     return ax
+
+
+def plot_eigen_histogram(
+    eigenvalues: np.ndarray,
+    bins: int = 45,
+    density: bool = True,
+    ax: plt.Axes | None = None,
+    label: str = "empirical eigenvalues",
+    alpha: float = 0.5,
+) -> plt.Axes:
+    """Plot histogram of eigenvalues."""
+    values = np.asarray(eigenvalues, dtype=float)
+    if ax is None:
+        _, ax = plt.subplots()
+    ax.hist(values, bins=bins, density=density, alpha=alpha, label=label)
+    ax.set_xlabel("eigenvalue")
+    ax.set_ylabel("density" if density else "count")
+    return ax

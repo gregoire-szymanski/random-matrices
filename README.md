@@ -1,68 +1,8 @@
 # mpdiff
 
-`mpdiff` is a Python 3.11+ project for:
+`mpdiff` provides production-quality simulation tooling for high-dimensional diffusions with piecewise-constant volatility and configurable covariance models.
 
-- simulating high-dimensional diffusions with piecewise-constant volatility,
-- building covariance models across several structural regimes,
-- analyzing empirical and population spectral laws,
-- computing Marcenko-Pastur (MP) forward transforms,
-- solving MP inverse problems with swappable methods,
-- running reproducible experiments via config-driven CLI workflows.
-
-## Main Features
-
-### Diffusion simulation
-
-- Euler simulation on `[0, T]` with `n+1` time points.
-- Piecewise-constant covariance schedules.
-- Reproducible random generation via global seeds.
-
-### Covariance / volatility models
-
-Supported covariance models include:
-
-1. `diag_scalar`: diagonal with one repeated eigenvalue.
-2. `diag_distribution`: diagonal eigenvalues from
-   - `dirac`,
-   - finite `dirac_mixture`,
-   - `uniform`,
-   - `gamma`,
-   - `rescaled_beta` (`a * Beta(alpha, beta) + b`).
-3. `orthogonal_diag`: `U diag(λ) U^T` with configurable orthogonal generation.
-4. `low_rank_plus_diag`: `B Σ B^T + D`, with low-rank latent + diagonal noise.
-5. Piecewise mode where each segment is any model above.
-6. Piecewise scaled-base mode where each segment is a scalar times a base random matrix law, with explicit controls for shared/fixed/redrawn base matrices.
-
-### Spectral analysis
-
-- Empirical spectral density estimation from realized covariance.
-- MP forward transform using Silverstein fixed-point equations.
-- MP inverse with multiple methods:
-  - `optimization`
-  - `fixed_point`
-  - `stieltjes_based`
-  - `moment_based`
-
-## Project Layout
-
-```text
-project_root/
-  pyproject.toml
-  README.md
-  src/
-    mpdiff/
-      config/
-      simulation/
-      spectral/
-      plotting/
-      utils/
-      experiments/
-      cli.py
-  configs/
-  notebooks/
-  tests/
-  docs/
-```
+This README focuses on the simulation and configuration system.
 
 ## Installation
 
@@ -72,80 +12,123 @@ source .venv/bin/activate
 pip install -e .[dev]
 ```
 
-## CLI Usage
+## Run a Simulation
 
-Run one of the provided experiment modes:
+Use the CLI simulation runner:
 
 ```bash
-mpdiff simulation --config configs/constant_diag_dirac.yaml
-mpdiff mp-forward --config configs/constant_diag_dirac.yaml
-mpdiff mp-inverse --config configs/constant_diag_dirac.yaml
-mpdiff full-pipeline --config configs/piecewise_models.yaml
+mpdiff simulation --config configs/simulation_examples/01_constant_isotropic.yaml
 ```
 
-Outputs (arrays, plots, logs) are written to `global.output_dir`.
+or
 
-## Config System
-
-Configs can be YAML or TOML. The schema includes:
-
-- global runtime controls (`seed`, logging, output paths),
-- simulation (`d`, `T`, `n_steps`, drift, optional custom time grid),
-- volatility mode and covariance model definitions,
-- MP forward and inverse numerical tolerances/iterations,
-- plotting and benchmarking switches.
-
-Example segment-based volatility:
-
-```yaml
-volatility:
-  mode: piecewise
-  segments:
-    - start: 0.0
-      end: 0.4
-      scalar: 1.0
-      model:
-        kind: diag_distribution
-        eigen_distribution:
-          kind: uniform
-          low: 0.4
-          high: 1.1
-    - start: 0.4
-      end: 1.0
-      scalar: 0.8
-      model:
-        kind: low_rank_plus_diag
-        low_rank:
-          rank: 8
+```bash
+python -m mpdiff.cli simulation --config configs/simulation_examples/01_constant_isotropic.yaml
 ```
 
-## Inverse Method Switching
+## Simulation Model
 
-Set `mp_inverse.method` to compare approaches in identical pipelines:
+The Euler scheme is:
 
-- `fixed_point`: fast kernel deconvolution-style update.
-- `optimization`: minimizes forward mismatch under smoothness penalty.
-- `stieltjes_based`: pointwise inversion using estimated Stieltjes transform.
-- `moment_based`: low-order moment matching + parametric fit.
+`X_{t_{i+1}} = X_{t_i} + b_i * dt + sigma_i * sqrt(dt) * Z_i`, with `Z_i ~ N(0, I_d)`.
+
+- `sigma_i` is constant on each piecewise segment from config.
+- Drift supports `zero`, `constant`, `linear_mean_reversion`, `time_sine`, and optional imported `callable`.
+
+## YAML Config Structure
+
+Top-level sections:
+
+- `global`: seed, output dir, logging, save switches.
+- `simulation`: `d`, `T`, `n_steps`, `initial_state`, `drift_model`, optional `time_grid`.
+- `volatility`: mode and covariance model definitions.
+- `plotting`: simulation plotting controls.
+- `benchmark`: timer logging switch.
+
+Volatility modes:
+
+1. `constant`
+2. `piecewise`
+3. `piecewise_scaled_base` (segment law `Cov_j = c_j * M_j`)
+
+Covariance model kinds:
+
+1. `diag_scalar`: `Cov = lambda * I_d`
+2. `diag_distribution`: diagonal eigenvalues from one law
+3. `orthogonal_diag`: `Cov = U diag(lambda) U^T`
+4. `low_rank_plus_diag`: `Cov = B Sigma B^T + D`
+
+Supported diagonal/eigenvalue distributions:
+
+- `dirac`
+- `dirac_mixture`
+- `uniform`
+- `gamma`
+- `rescaled_beta` (implemented as `beta_scale * Beta(alpha, beta) + beta_shift`)
+
+## Example Configs
+
+All examples are in `configs/simulation_examples/` and include inline YAML comments:
+
+1. `01_constant_isotropic.yaml`
+2. `02_constant_diag_gamma.yaml`
+3. `03_constant_rotated_haar.yaml`
+4. `04_low_rank_plus_diag.yaml`
+5. `05_piecewise_two_segments.yaml`
+6. `06_piecewise_scaled_base.yaml`
+
+## Produced Output Files
+
+For one simulation run, outputs are written to `global.output_dir`.
+
+Arrays:
+
+- `times.npy`
+- `paths.npy`
+- `increments.npy`
+- `segment_indices.npy`
+- `realized_covariance.npy`
+- `realized_eigenvalues.npy`
+- `target_integrated_covariance.npy`
+- `target_population_eigenvalues.npy`
+- `realized_density.npz`
+- `target_density.npz`
+
+Metadata:
+
+- `metadata.json` (config path, timers, drift info, key summary statistics)
+
+Figures (if enabled):
+
+- `paths_sample.png`
+- `eigen_histogram.png`
+- `eigen_density_comparison.png`
+
+## Notebooks
+
+One notebook per simulation example is provided under `notebooks/simulation_examples/`:
+
+- `01_constant_isotropic.ipynb`
+- `02_constant_diag_gamma.ipynb`
+- `03_constant_rotated_haar.ipynb`
+- `04_low_rank_plus_diag.ipynb`
+- `05_piecewise_two_segments.ipynb`
+- `06_piecewise_scaled_base.ipynb`
+
+Each notebook:
+
+- runs the corresponding config,
+- plots sample coordinates,
+- compares realized and target population eigenvalue histograms.
+
+## Additional Docs
+
+- `docs/simulation_config_guide.md`
+- `docs/architecture.md`
+- `docs/numerics.md`
 
 ## Tests
 
 ```bash
 pytest
 ```
-
-The test suite covers config loading, covariance construction PSD checks, simulation reproducibility, MP forward numerical sanity, and inverse recovery quality.
-
-## Notebooks
-
-Starter notebooks are provided in `notebooks/` for:
-
-- forward/inverse MP demonstrations,
-- end-to-end simulation pipeline walkthroughs.
-
-## Documentation
-
-Additional notes are available in:
-
-- `docs/architecture.md`
-- `docs/numerics.md`

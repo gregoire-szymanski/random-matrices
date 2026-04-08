@@ -1,0 +1,54 @@
+# Example 01
+# Constant isotropic covariance: Cov = lambda * I_d
+# All coordinates have same instantaneous variance and zero correlation.
+
+global:
+  seed: 20260408
+  output_dir: outputs/sim_example_01_constant_isotropic
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 80
+  T: 1.0
+  n_steps: 400
+  initial_state: 0.0
+
+  # Drift model: zero drift, so increments come only from diffusion term.
+  drift_model:
+    kind: zero
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    # lambda in Cov = lambda * I_d
+    scalar: 1.25
+
+    # draw_once means the model realization is fixed if reused.
+    sampling_policy: draw_once
+
+    # Small jitter for numerical stabilization.
+    jitter: 1.0e-10
+
+# Used for plotting grids in simulation runner density outputs.
+mp_forward:
+  grid_min: 0.0
+  grid_max: 4.0
+  num_points: 500
+
+plotting:
+  style: default
+  figsize: [9, 5]
+  dpi: 130
+  show: false
+  plot_paths: true
+  max_path_dims: 5
+  plot_eigen_hist: true
+  eigen_hist_bins: 45
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true
