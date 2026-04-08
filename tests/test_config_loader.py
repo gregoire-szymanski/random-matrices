@@ -26,3 +26,11 @@ def test_load_spectral_config_with_population_spectrum() -> None:
     assert cfg.analysis.population_spectrum.source == "parametric"
     assert cfg.analysis.population_spectrum.kind == "gamma"
     assert cfg.mp_inverse.compare_methods == ["optimization", "moment_based"]
+
+
+def test_load_catalog_config_with_compare_all() -> None:
+    config_path = Path(__file__).resolve().parents[1] / "configs" / "config_diagonal_gamma.yaml"
+    cfg = load_config(config_path)
+
+    assert cfg.mp_inverse.compare_all_methods is True
+    assert cfg.mp_inverse.compare_methods == []

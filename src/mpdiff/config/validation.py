@@ -325,6 +325,11 @@ def validate_config(cfg: ProjectConfig) -> None:
         if method_name not in supported_inverse_methods:
             raise ConfigValidationError(f"mp_inverse.compare_methods[{idx}] is invalid: {method_name}")
 
+    if cfg.mp_inverse.compare_all_methods and cfg.mp_inverse.compare_methods:
+        raise ConfigValidationError(
+            "mp_inverse.compare_all_methods=true cannot be combined with explicit mp_inverse.compare_methods"
+        )
+
     if not 0 <= cfg.mp_inverse.fixed_point.smoothing_strength <= 1:
         raise ConfigValidationError("mp_inverse.fixed_point.smoothing_strength must be in [0, 1]")
     if cfg.mp_inverse.fixed_point.min_kernel_density <= 0:

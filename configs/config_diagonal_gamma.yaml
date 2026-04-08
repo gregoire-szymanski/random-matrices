@@ -1,0 +1,72 @@
+# Config 4
+# Constant diagonal covariance with gamma-distributed eigenvalues.
+# This file also demonstrates "compare all inversion methods" mode.
+
+global:
+  seed: 20260408
+  output_dir: outputs/config_diagonal_gamma
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 120
+  T: 1.0
+  n_steps: 500
+  initial_state: 0.0
+  drift_model:
+    kind: zero
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_distribution
+    eigen_distribution:
+      kind: gamma
+      shape: 2.3
+      scale: 0.40
+    sampling_policy: draw_once
+    jitter: 1.0e-10
+
+mp_forward:
+  aspect_ratio: 0.24
+  grid_min: 0.0
+  grid_max: 6.0
+  num_points: 540
+  eta: 0.0035
+  tol: 1.0e-9
+  max_iter: 540
+  damping: 0.72
+
+mp_inverse:
+  method: optimization
+  # Run all registered methods automatically.
+  compare_all_methods: true
+  n_support: 55
+  support_min: 0.05
+  support_max: 4.5
+  eta: 0.0035
+  tol: 1.0e-6
+  max_iter: 320
+  regularization: 1.0e-3
+  optimizer_max_iter: 110
+  forward_max_iter: 240
+  forward_tol: 1.0e-7
+
+analysis:
+  realized_covariance_normalization: total_time
+  empirical_histogram_bins: 55
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+  plot_paths: true
+  max_path_dims: 4
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

@@ -1,0 +1,73 @@
+# Config 2
+# Constant diagonal covariance with finite Dirac-mixture eigenvalue law.
+# Diagonal entries are sampled from a discrete set with specified probabilities.
+
+global:
+  seed: 20260408
+  output_dir: outputs/config_diagonal_dirac_mixture
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 100
+  T: 1.0
+  n_steps: 450
+  initial_state: 0.0
+  drift_model:
+    kind: zero
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_distribution
+    eigen_distribution:
+      kind: dirac_mixture
+      # Possible diagonal eigenvalues.
+      values: [0.40, 0.90, 1.70, 2.60]
+      # Probabilities must sum to a positive number.
+      weights: [0.20, 0.35, 0.30, 0.15]
+    sampling_policy: draw_once
+    jitter: 1.0e-10
+
+mp_forward:
+  aspect_ratio: 0.22
+  grid_min: 0.0
+  grid_max: 6.0
+  num_points: 520
+  eta: 0.0035
+  tol: 1.0e-9
+  max_iter: 520
+  damping: 0.72
+
+mp_inverse:
+  method: optimization
+  compare_methods: [optimization, fixed_point, stieltjes_based, moment_based]
+  n_support: 55
+  support_min: 0.05
+  support_max: 4.0
+  eta: 0.0035
+  tol: 1.0e-6
+  max_iter: 320
+  regularization: 8.0e-4
+  optimizer_max_iter: 110
+  forward_max_iter: 240
+  forward_tol: 1.0e-7
+
+analysis:
+  realized_covariance_normalization: total_time
+  empirical_histogram_bins: 50
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+  plot_paths: true
+  max_path_dims: 4
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

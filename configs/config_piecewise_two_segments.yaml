@@ -1,0 +1,90 @@
+# Config 8
+# Piecewise constant volatility with two different models.
+# Segment 1: isotropic diagonal
+# Segment 2: rotated diagonal with Haar U
+
+global:
+  seed: 20260408
+  output_dir: outputs/config_piecewise_two_segments
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 90
+  T: 1.0
+  n_steps: 450
+  initial_state: 0.0
+  drift_model:
+    kind: zero
+
+volatility:
+  mode: piecewise
+  segments:
+    - name: early_isotropic
+      start: 0.0
+      end: 0.40
+      scalar: 1.0
+      model:
+        kind: diag_scalar
+        scalar: 0.8
+        sampling_policy: draw_once
+
+    - name: late_rotated
+      start: 0.40
+      end: 1.00
+      scalar: 1.2
+      model:
+        kind: orthogonal_diag
+        orthogonal:
+          method: haar
+        eigen_distribution:
+          kind: rescaled_beta
+          alpha: 2.2
+          beta: 5.0
+          beta_scale: 2.0
+          beta_shift: 0.15
+        sampling_policy: redraw_per_segment
+        jitter: 1.0e-10
+
+mp_forward:
+  aspect_ratio: 0.20
+  grid_min: 0.0
+  grid_max: 6.0
+  num_points: 540
+  eta: 0.004
+  tol: 1.0e-9
+  max_iter: 540
+  damping: 0.70
+
+mp_inverse:
+  method: optimization
+  compare_methods: [optimization, fixed_point, moment_based]
+  n_support: 55
+  support_min: 0.05
+  support_max: 4.5
+  eta: 0.004
+  tol: 1.0e-6
+  max_iter: 320
+  regularization: 1.0e-3
+  optimizer_max_iter: 110
+  forward_max_iter: 240
+  forward_tol: 1.0e-7
+
+analysis:
+  realized_covariance_normalization: total_time
+  empirical_histogram_bins: 52
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+  plot_paths: true
+  max_path_dims: 5
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

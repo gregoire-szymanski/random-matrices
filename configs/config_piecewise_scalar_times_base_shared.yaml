@@ -1,0 +1,94 @@
+# Config 9
+# Piecewise scalar-times-base model with one shared base random matrix M:
+#   Cov_j = c_j * M
+# M is drawn once and reused for all segments (common_fixed policy).
+
+global:
+  seed: 20260408
+  output_dir: outputs/config_piecewise_scalar_times_base_shared
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 100
+  T: 1.0
+  n_steps: 480
+  initial_state: 0.0
+  drift_model:
+    kind: zero
+
+volatility:
+  mode: piecewise_scaled_base
+  scaled_base:
+    base_matrix_policy: common_fixed
+    share_matrix_law_across_segments: true
+    base_model:
+      kind: low_rank_plus_diag
+      low_rank:
+        rank: 10
+        latent_eigen_distribution:
+          kind: gamma
+          shape: 2.4
+          scale: 0.45
+        factor:
+          method: gaussian
+          scale: 1.0
+          normalize_columns: true
+        diagonal_noise:
+          kind: scalar_identity
+          scalar: 0.10
+      sampling_policy: draw_once
+      jitter: 1.0e-10
+  segments:
+    - start: 0.00
+      end: 0.25
+      scalar: 0.70
+    - start: 0.25
+      end: 0.60
+      scalar: 1.40
+    - start: 0.60
+      end: 1.00
+      scalar: 1.00
+
+mp_forward:
+  aspect_ratio: 0.21
+  grid_min: 0.0
+  grid_max: 7.0
+  num_points: 560
+  eta: 0.004
+  tol: 1.0e-9
+  max_iter: 560
+  damping: 0.72
+
+mp_inverse:
+  method: moment_based
+  compare_methods: [moment_based, optimization]
+  n_support: 50
+  support_min: 0.05
+  support_max: 5.5
+  eta: 0.004
+  tol: 1.0e-6
+  max_iter: 280
+  regularization: 1.0e-3
+  optimizer_max_iter: 100
+  forward_max_iter: 220
+  forward_tol: 1.0e-7
+
+analysis:
+  realized_covariance_normalization: total_time
+  empirical_histogram_bins: 50
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+  plot_paths: true
+  max_path_dims: 4
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

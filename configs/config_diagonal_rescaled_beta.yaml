@@ -1,0 +1,76 @@
+# Config 5
+# Constant diagonal covariance with rescaled-beta eigenvalues:
+#   eigenvalue = scale * Beta(alpha, beta) + shift
+
+global:
+  seed: 20260408
+  output_dir: outputs/config_diagonal_rescaled_beta
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 110
+  T: 1.0
+  n_steps: 500
+  initial_state: 0.0
+  drift_model:
+    kind: zero
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_distribution
+    eigen_distribution:
+      kind: rescaled_beta
+      alpha: 2.0
+      beta: 6.0
+      beta_scale: 2.2
+      beta_shift: 0.15
+    sampling_policy: draw_once
+    jitter: 1.0e-10
+
+mp_forward:
+  aspect_ratio: 0.22
+  grid_min: 0.0
+  grid_max: 5.5
+  num_points: 520
+  eta: 0.0035
+  tol: 1.0e-9
+  max_iter: 520
+  damping: 0.70
+
+mp_inverse:
+  method: stieltjes_based
+  compare_methods: [stieltjes_based, optimization, fixed_point]
+  n_support: 52
+  support_min: 0.05
+  support_max: 4.0
+  eta: 0.0035
+  tol: 1.0e-6
+  max_iter: 300
+  regularization: 8.0e-4
+  optimizer_max_iter: 100
+  forward_max_iter: 220
+  forward_tol: 1.0e-7
+  stieltjes_based:
+    quantile_min: 0.03
+    quantile_max: 0.97
+
+analysis:
+  realized_covariance_normalization: total_time
+  empirical_histogram_bins: 50
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+  plot_paths: true
+  max_path_dims: 4
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

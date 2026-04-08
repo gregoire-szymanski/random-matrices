@@ -23,7 +23,7 @@ from mpdiff.spectral.empirical import (
     realized_covariance_from_increments,
 )
 from mpdiff.spectral.grids import make_linear_grid
-from mpdiff.spectral.inverse import compare_inverse_methods
+from mpdiff.spectral.inverse import available_inverse_methods, compare_inverse_methods
 from mpdiff.spectral.metrics import compare_grid_densities, discrete_to_grid
 from mpdiff.spectral.transforms import compute_mp_forward
 from mpdiff.utils.logging_utils import setup_logging
@@ -111,7 +111,10 @@ def run_full_pipeline(config_path: str | Path) -> dict[str, Any]:
     _timer_store(timers, timer.label, timer.elapsed_seconds)
 
     with timed_block("mp_inverse", logger if cfg.benchmark.enabled else None) as timer:
-        methods = cfg.mp_inverse.compare_methods or [cfg.mp_inverse.method]
+        if cfg.mp_inverse.compare_all_methods:
+            methods = available_inverse_methods()
+        else:
+            methods = cfg.mp_inverse.compare_methods or [cfg.mp_inverse.method]
         inverse_results = compare_inverse_methods(
             observed=empirical_density,
             aspect_ratio=aspect_ratio,

@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from mpdiff.experiments.run_full_pipeline import run_full_pipeline
+from mpdiff.experiments.run_inversion_benchmark import run_inversion_benchmark
 from mpdiff.experiments.run_mp_forward import run_mp_forward
 from mpdiff.experiments.run_mp_inverse import run_mp_inverse
 from mpdiff.experiments.run_simulation import run_simulation
@@ -16,7 +17,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="mpdiff experiment runner")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    for command in ["simulation", "mp-forward", "mp-inverse", "full-pipeline", "end-to-end"]:
+    for command in [
+        "simulation",
+        "mp-forward",
+        "mp-inverse",
+        "full-pipeline",
+        "end-to-end",
+        "inversion-benchmark",
+    ]:
         sub = subparsers.add_parser(command)
         sub.add_argument("--config", type=Path, required=True, help="Path to YAML/TOML config")
 
@@ -35,6 +43,8 @@ def main() -> None:
         run_mp_inverse(args.config)
     elif args.command in {"full-pipeline", "end-to-end"}:
         run_full_pipeline(args.config)
+    elif args.command == "inversion-benchmark":
+        run_inversion_benchmark(args.config)
     else:
         raise ValueError(f"Unknown command: {args.command}")
 

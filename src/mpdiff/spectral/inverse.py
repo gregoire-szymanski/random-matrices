@@ -59,7 +59,12 @@ def compare_inverse_methods(
     methods: list[str] | None = None,
 ) -> dict[str, InversionResult]:
     """Run several inverse methods on the same observed density."""
-    method_names = methods if methods is not None else inverse_settings.compare_methods
+    if methods is not None:
+        method_names = methods
+    elif inverse_settings.compare_all_methods:
+        method_names = available_inverse_methods()
+    else:
+        method_names = inverse_settings.compare_methods
     if not method_names:
         method_names = [inverse_settings.method]
 
@@ -67,6 +72,7 @@ def compare_inverse_methods(
     for method_name in method_names:
         local_settings = MPInverseConfig(
             method=method_name,
+            compare_all_methods=False,
             compare_methods=list(inverse_settings.compare_methods),
             n_support=inverse_settings.n_support,
             support_min=inverse_settings.support_min,
@@ -87,3 +93,8 @@ def compare_inverse_methods(
         results[method_name] = result
 
     return results
+
+
+def available_inverse_methods() -> list[str]:
+    """Return sorted list of registered inverse method names."""
+    return sorted(build_method_registry().keys())

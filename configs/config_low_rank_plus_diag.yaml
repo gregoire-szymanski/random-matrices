@@ -1,0 +1,88 @@
+# Config 7
+# Low-rank plus diagonal covariance:
+#   Cov = B * Sigma * B^T + D
+# with rank(Sigma) = K < d.
+
+global:
+  seed: 20260408
+  output_dir: outputs/config_low_rank_plus_diag
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 140
+  T: 1.0
+  n_steps: 550
+  initial_state: 0.0
+  drift_model:
+    kind: linear_mean_reversion
+    theta: 0.20
+    target: 0.0
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: low_rank_plus_diag
+    low_rank:
+      rank: 12
+      latent_eigen_distribution:
+        kind: gamma
+        shape: 2.0
+        scale: 0.55
+      factor:
+        # gaussian | identity_block | from_file
+        method: gaussian
+        scale: 1.0
+        normalize_columns: true
+      diagonal_noise:
+        # D diagonal from a positive distribution.
+        kind: distribution
+        distribution:
+          kind: uniform
+          low: 0.05
+          high: 0.20
+    sampling_policy: draw_once
+    jitter: 1.0e-10
+
+mp_forward:
+  aspect_ratio: 0.25
+  grid_min: 0.0
+  grid_max: 6.5
+  num_points: 560
+  eta: 0.004
+  tol: 1.0e-9
+  max_iter: 560
+  damping: 0.72
+
+mp_inverse:
+  method: optimization
+  compare_methods: [optimization, moment_based, fixed_point]
+  n_support: 60
+  support_min: 0.05
+  support_max: 5.5
+  eta: 0.004
+  tol: 1.0e-6
+  max_iter: 340
+  regularization: 1.2e-3
+  optimizer_max_iter: 120
+  forward_max_iter: 260
+  forward_tol: 1.0e-7
+
+analysis:
+  realized_covariance_normalization: total_time
+  empirical_histogram_bins: 55
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+  plot_paths: true
+  max_path_dims: 4
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

@@ -1,0 +1,78 @@
+# Config 1
+# Constant isotropic covariance: Cov = lambda * I_d.
+# This is the cleanest baseline for checking the full simulation -> inversion pipeline.
+
+global:
+  seed: 20260408
+  output_dir: outputs/config_constant_isotropic
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  # d = diffusion dimension, n_steps = Euler steps (path has n_steps + 1 points)
+  d: 80
+  T: 1.0
+  n_steps: 400
+  initial_state: 0.0
+  drift_model:
+    kind: zero
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_scalar
+    # lambda in Cov = lambda I_d
+    scalar: 1.20
+    sampling_policy: draw_once
+    jitter: 1.0e-10
+
+mp_forward:
+  # If aspect_ratio is omitted, code uses d / n_steps.
+  aspect_ratio: 0.20
+  grid_min: 0.0
+  grid_max: 4.5
+  num_points: 500
+  eta: 0.003
+  tol: 1.0e-9
+  max_iter: 500
+  damping: 0.72
+
+mp_inverse:
+  # Primary method used for top-level summary.
+  method: optimization
+  # Compare side-by-side with additional methods.
+  compare_methods: [optimization, fixed_point, moment_based]
+  n_support: 40
+  support_min: 0.05
+  support_max: 3.5
+  eta: 0.003
+  tol: 1.0e-6
+  max_iter: 260
+  regularization: 1.0e-3
+  optimizer_max_iter: 90
+  forward_max_iter: 220
+  forward_tol: 1.0e-7
+  optimization:
+    optimizer: L-BFGS-B
+    max_iter: 90
+
+analysis:
+  # Standard normalization: (sum dX dX^T) / T
+  realized_covariance_normalization: total_time
+  empirical_density_bandwidth: null
+  empirical_histogram_bins: 45
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+  plot_paths: true
+  max_path_dims: 5
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true

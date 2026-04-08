@@ -195,6 +195,7 @@ class MPInverseConfig:
     """Numerical parameters for MP inverse procedures."""
 
     method: str = "optimization"  # optimization | fixed_point | stieltjes_based | moment_based
+    compare_all_methods: bool = False
     compare_methods: list[str] = field(default_factory=list)
     n_support: int = 50
     support_min: float | None = None
@@ -610,6 +611,7 @@ def project_config_from_dict(data: Mapping[str, Any]) -> ProjectConfig:
         ),
         mp_inverse=MPInverseConfig(
             method=str(inv_data.get("method", "optimization")),
+            compare_all_methods=bool(inv_data.get("compare_all_methods", False)),
             compare_methods=compare_methods,
             n_support=int(inv_data.get("n_support", 50)),
             support_min=float(inv_data["support_min"]) if inv_data.get("support_min") is not None else None,

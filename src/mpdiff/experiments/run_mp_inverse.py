@@ -13,7 +13,7 @@ import numpy as np
 from mpdiff.config.loader import load_config
 from mpdiff.plotting.diagnostics import plot_convergence_curve
 from mpdiff.plotting.spectra import plot_density_comparison, plot_population_forward_recovered
-from mpdiff.spectral.inverse import compare_inverse_methods
+from mpdiff.spectral.inverse import available_inverse_methods, compare_inverse_methods
 from mpdiff.spectral.metrics import compare_grid_densities, discrete_to_grid
 from mpdiff.spectral.grids import make_linear_grid
 from mpdiff.spectral.transforms import compute_mp_forward
@@ -59,7 +59,10 @@ def run_mp_inverse(config_path: str | Path) -> dict[str, Any]:
         )
 
     observed = observed_result.transformed_density
-    methods = cfg.mp_inverse.compare_methods or [cfg.mp_inverse.method]
+    if cfg.mp_inverse.compare_all_methods:
+        methods = available_inverse_methods()
+    else:
+        methods = cfg.mp_inverse.compare_methods or [cfg.mp_inverse.method]
 
     with timed_block("mp_inverse_methods", logger if cfg.benchmark.enabled else None):
         inverse_results = compare_inverse_methods(

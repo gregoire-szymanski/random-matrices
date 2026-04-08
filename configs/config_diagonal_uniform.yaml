@@ -1,0 +1,74 @@
+# Config 3
+# Constant diagonal covariance with uniform eigenvalues on [a, b].
+
+global:
+  seed: 20260408
+  output_dir: outputs/config_diagonal_uniform
+  log_level: INFO
+  save_figures: true
+  save_arrays: true
+  save_metadata: true
+
+simulation:
+  d: 110
+  T: 1.0
+  n_steps: 480
+  initial_state: 0.0
+  drift_model:
+    kind: constant
+    # Scalar is broadcast to all d coordinates.
+    vector: [0.01]
+
+volatility:
+  mode: constant
+  constant_model:
+    kind: diag_distribution
+    eigen_distribution:
+      kind: uniform
+      low: 0.30
+      high: 1.80
+    sampling_policy: draw_once
+    jitter: 1.0e-10
+
+mp_forward:
+  aspect_ratio: 0.23
+  grid_min: 0.0
+  grid_max: 5.0
+  num_points: 520
+  eta: 0.003
+  tol: 1.0e-9
+  max_iter: 500
+  damping: 0.70
+
+mp_inverse:
+  method: fixed_point
+  compare_methods: [fixed_point, optimization, moment_based]
+  n_support: 50
+  support_min: 0.05
+  support_max: 3.5
+  eta: 0.003
+  tol: 2.0e-6
+  max_iter: 300
+  regularization: 6.0e-2
+  optimizer_max_iter: 90
+  forward_max_iter: 220
+  forward_tol: 1.0e-7
+  fixed_point:
+    smoothing_strength: 0.08
+
+analysis:
+  realized_covariance_normalization: total_time
+  empirical_histogram_bins: 48
+
+plotting:
+  style: default
+  figsize: [10, 5]
+  dpi: 130
+  show: false
+  plot_paths: true
+  max_path_dims: 4
+  plot_eigen_hist: true
+  plot_eigen_density: true
+
+benchmark:
+  enabled: true
