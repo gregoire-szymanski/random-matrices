@@ -13,7 +13,7 @@ global:
 simulation:
   d: 100
   T: 1.0
-  n_steps: 450
+  n_steps: 10000
   initial_state: 0.0
   drift_model:
     kind: zero
@@ -32,7 +32,7 @@ volatility:
     jitter: 1.0e-10
 
 mp_forward:
-  aspect_ratio: 0.22
+  # aspect_ratio: 0.22
   grid_min: 0.0
   grid_max: 6.0
   num_points: 520

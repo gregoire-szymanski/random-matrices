@@ -14,7 +14,7 @@ simulation:
   # d = diffusion dimension, n_steps = Euler steps (path has n_steps + 1 points)
   d: 80
   T: 1.0
-  n_steps: 400
+  n_steps: 4000
   initial_state: 0.0
   drift_model:
     kind: zero
@@ -30,7 +30,7 @@ volatility:
 
 mp_forward:
   # If aspect_ratio is omitted, code uses d / n_steps.
-  aspect_ratio: 0.20
+  # aspect_ratio: 0.20
   grid_min: 0.0
   grid_max: 4.5
   num_points: 500
