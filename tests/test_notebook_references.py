@@ -8,7 +8,8 @@ from pathlib import Path
 
 
 def test_notebook_config_paths_exist() -> None:
-    pattern = re.compile(r"Path\((['\"])(.*?)\1\)")
+    path_pattern = re.compile(r"Path\((['\"])(.*?)\1\)")
+    root_join_pattern = re.compile(r"PROJECT_ROOT\s*/\s*(['\"])(configs/[^'\"]+)\1")
     notebook_root = Path(__file__).resolve().parents[1] / "notebooks"
 
     missing: list[tuple[str, str]] = []
@@ -18,10 +19,11 @@ def test_notebook_config_paths_exist() -> None:
             if cell.get("cell_type") != "code":
                 continue
             source = "".join(cell.get("source", []))
-            for match in pattern.finditer(source):
-                value = match.group(2)
-                if value.startswith("configs/"):
-                    if not (Path(__file__).resolve().parents[1] / value).exists():
-                        missing.append((str(nb_path), value))
+            values = [m.group(2) for m in path_pattern.finditer(source)] + [
+                m.group(2) for m in root_join_pattern.finditer(source)
+            ]
+            for value in values:
+                if value.startswith("configs/") and not (Path(__file__).resolve().parents[1] / value).exists():
+                    missing.append((str(nb_path), value))
 
     assert not missing, f"Missing notebook config references: {missing}"

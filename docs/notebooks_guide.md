@@ -56,6 +56,8 @@ Recommended environment:
 
 - use the same virtual environment as CLI runs,
 - install dev dependencies with `pip install -e .[dev]`.
+- run the first code cell in each notebook before other cells: it resolves `PROJECT_ROOT`
+  and injects `src/` into `sys.path` so `mpdiff` imports work even if the kernel starts in a subfolder.
 
 ## 3. Reproducibility Tips
 
